@@ -3,12 +3,12 @@ set -euo pipefail
 
 export HERMES_HOME="${HERMES_HOME:-/data/.hermes}"
 export HOME="${HOME:-/data}"
-export MESSAGING_CWD="${MESSAGING_CWD:-/data/workspace}"
+LEGACY_MESSAGING_CWD="${MESSAGING_CWD:-/data/workspace}"
 
 INIT_MARKER="${HERMES_HOME}/.initialized"
 ENV_FILE="${HERMES_HOME}/.env"
 CONFIG_FILE="${HERMES_HOME}/config.yaml"
-DEFAULT_TERMINAL_CWD="${TERMINAL_CWD:-${MESSAGING_CWD}}"
+DEFAULT_TERMINAL_CWD="${TERMINAL_CWD:-${LEGACY_MESSAGING_CWD}}"
 
 mkdir -p "${HERMES_HOME}" "${HERMES_HOME}/logs" "${HERMES_HOME}/sessions" "${HERMES_HOME}/cron" "${HERMES_HOME}/pairing" "${DEFAULT_TERMINAL_CWD}"
 
@@ -196,4 +196,5 @@ if [[ -z "${TELEGRAM_ALLOWED_USERS:-}${DISCORD_ALLOWED_USERS:-}${SLACK_ALLOWED_U
 fi
 
 echo "[bootstrap] Starting Hermes gateway..."
+unset MESSAGING_CWD
 exec hermes gateway
