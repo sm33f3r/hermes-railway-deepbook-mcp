@@ -32,7 +32,8 @@ Template defaults (already included in `railway.toml`):
 
 - `HERMES_HOME=/data/.hermes`
 - `HOME=/data`
-- `MESSAGING_CWD=/data/workspace`
+
+Hermes terminal sessions default to `/data/workspace` via `${HERMES_HOME}/config.yaml`.
 
 ## Default environment variables
 
@@ -125,6 +126,7 @@ Entrypoint (`scripts/entrypoint.sh`) does the following:
 - Validates required provider and platform variables
 - Writes runtime env to `${HERMES_HOME}/.env`
 - Creates `${HERMES_HOME}/config.yaml` if missing
+- Migrates deprecated `MESSAGING_CWD` from `${HERMES_HOME}/.env` into `config.yaml` and removes it from persisted env
 - Persists one-time marker `${HERMES_HOME}/.initialized`
 - Starts `hermes gateway`
 

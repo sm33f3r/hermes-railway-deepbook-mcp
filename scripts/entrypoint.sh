@@ -8,8 +8,9 @@ export MESSAGING_CWD="${MESSAGING_CWD:-/data/workspace}"
 INIT_MARKER="${HERMES_HOME}/.initialized"
 ENV_FILE="${HERMES_HOME}/.env"
 CONFIG_FILE="${HERMES_HOME}/config.yaml"
+DEFAULT_TERMINAL_CWD="${TERMINAL_CWD:-${MESSAGING_CWD}}"
 
-mkdir -p "${HERMES_HOME}" "${HERMES_HOME}/logs" "${HERMES_HOME}/sessions" "${HERMES_HOME}/cron" "${HERMES_HOME}/pairing" "${MESSAGING_CWD}"
+mkdir -p "${HERMES_HOME}" "${HERMES_HOME}/logs" "${HERMES_HOME}/sessions" "${HERMES_HOME}/cron" "${HERMES_HOME}/pairing" "${DEFAULT_TERMINAL_CWD}"
 
 is_true() {
   case "${1:-}" in
@@ -67,6 +68,91 @@ append_if_set() {
   fi
 }
 
+read_env_value() {
+  local file="$1"
+  local key="$2"
+
+  if [[ ! -f "$file" ]]; then
+    return 1
+  fi
+
+  grep -E "^${key}=" "$file" | head -n 1 | cut -d '=' -f 2-
+}
+
+config_has_terminal_cwd() {
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    return 1
+  fi
+
+  awk '
+    /^terminal:[[:space:]]*$/ { in_terminal = 1; next }
+    in_terminal && /^[^[:space:]]/ { in_terminal = 0 }
+    in_terminal && /^[[:space:]]+cwd:[[:space:]]*/ { found = 1; exit }
+    END { exit(found ? 0 : 1) }
+  ' "$CONFIG_FILE"
+}
+
+config_has_terminal_section() {
+  [[ -f "$CONFIG_FILE" ]] && grep -qE '^terminal:[[:space:]]*$' "$CONFIG_FILE"
+}
+
+create_default_config() {
+  echo "[bootstrap] Creating ${CONFIG_FILE}"
+  cat > "$CONFIG_FILE" <<EOF
+terminal:
+  backend: ${TERMINAL_ENV:-${TERMINAL_BACKEND:-local}}
+  cwd: $1
+  timeout: ${TERMINAL_TIMEOUT:-180}
+compression:
+  enabled: true
+  threshold: 0.85
+EOF
+}
+
+ensure_terminal_cwd_in_config() {
+  local cwd="$1"
+  local tmp_file
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    create_default_config "$cwd"
+    return 0
+  fi
+
+  if config_has_terminal_cwd; then
+    return 0
+  fi
+
+  if config_has_terminal_section; then
+    tmp_file="$(mktemp)"
+    awk -v cwd="$cwd" '
+      /^terminal:[[:space:]]*$/ && !inserted {
+        print
+        print "  cwd: " cwd
+        inserted = 1
+        next
+      }
+      { print }
+    ' "$CONFIG_FILE" > "$tmp_file"
+    mv "$tmp_file" "$CONFIG_FILE"
+    return 0
+  fi
+
+  printf '\nterminal:\n  cwd: %s\n' "$cwd" >> "$CONFIG_FILE"
+}
+
+migrate_legacy_messaging_cwd() {
+  local persisted_cwd legacy_cwd
+
+  persisted_cwd="$(read_env_value "$ENV_FILE" "MESSAGING_CWD" || true)"
+  legacy_cwd="${persisted_cwd:-${MESSAGING_CWD:-}}"
+
+  if [[ -n "$legacy_cwd" ]]; then
+    ensure_terminal_cwd_in_config "$legacy_cwd"
+  elif [[ ! -f "$CONFIG_FILE" ]]; then
+    create_default_config "$DEFAULT_TERMINAL_CWD"
+  fi
+}
+
 if ! has_valid_provider_config; then
   echo "[bootstrap] ERROR: Configure a provider: OPENROUTER_API_KEY, or OPENAI_BASE_URL+OPENAI_API_KEY, or ANTHROPIC_API_KEY." >&2
   exit 1
@@ -74,11 +160,12 @@ fi
 
 validate_platforms
 
+migrate_legacy_messaging_cwd
+
 echo "[bootstrap] Writing runtime env to ${ENV_FILE}"
 {
   echo "# Managed by entrypoint.sh"
   echo "HERMES_HOME=${HERMES_HOME}"
-  echo "MESSAGING_CWD=${MESSAGING_CWD}"
 } > "$ENV_FILE"
 
 for key in \
@@ -94,19 +181,6 @@ for key in \
 do
   append_if_set "$key"
 done
-
-if [[ ! -f "$CONFIG_FILE" ]]; then
-  echo "[bootstrap] Creating ${CONFIG_FILE}"
-  cat > "$CONFIG_FILE" <<EOF
-terminal:
-  backend: ${TERMINAL_ENV:-${TERMINAL_BACKEND:-local}}
-  cwd: ${TERMINAL_CWD:-/data/workspace}
-  timeout: ${TERMINAL_TIMEOUT:-180}
-compression:
-  enabled: true
-  threshold: 0.85
-EOF
-fi
 
 if [[ ! -f "$INIT_MARKER" ]]; then
   date -u +"%Y-%m-%dT%H:%M:%SZ" > "$INIT_MARKER"
