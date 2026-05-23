@@ -106,6 +106,9 @@ terminal:
 compression:
   enabled: true
   threshold: 0.85
+model:
+  default: ${HERMES_MODEL:-}
+  provider: ${HERMES_INFERENCE_PROVIDER:-openrouter}
 EOF
 }
 
@@ -140,6 +143,25 @@ ensure_terminal_cwd_in_config() {
   printf '\nterminal:\n  cwd: %s\n' "$cwd" >> "$CONFIG_FILE"
 }
 
+ensure_model_in_config() {
+  local model="${HERMES_MODEL:-}"
+  local provider="${HERMES_INFERENCE_PROVIDER:-openrouter}"
+  local tmp_file
+
+  if [[ -z "$model" ]]; then
+    echo "[bootstrap] WARNING: HERMES_MODEL is not set. Hermes may fail to connect to a model provider." >&2
+    return 0
+  fi
+
+  if grep -q "^model:" "$CONFIG_FILE" 2>/dev/null; then
+    return 0
+  fi
+
+  echo "[bootstrap] Writing model config to ${CONFIG_FILE}"
+  printf '\nmodel:\n  default: %s\n  provider: %s\n' \
+    "$model" "$provider" >> "$CONFIG_FILE"
+}
+
 migrate_legacy_messaging_cwd() {
   local persisted_cwd legacy_cwd
 
@@ -161,6 +183,7 @@ fi
 validate_platforms
 
 migrate_legacy_messaging_cwd
+ensure_model_in_config
 
 echo "[bootstrap] Writing runtime env to ${ENV_FILE}"
 {
@@ -193,6 +216,16 @@ if [[ -z "${TELEGRAM_ALLOWED_USERS:-}${DISCORD_ALLOWED_USERS:-}${SLACK_ALLOWED_U
   if ! is_true "${GATEWAY_ALLOW_ALL_USERS:-}" && ! is_true "${TELEGRAM_ALLOW_ALL_USERS:-}" && ! is_true "${DISCORD_ALLOW_ALL_USERS:-}" && ! is_true "${SLACK_ALLOW_ALL_USERS:-}"; then
     echo "[bootstrap] WARNING: No allowlists configured. Gateway defaults to deny-all; use DM pairing or set *_ALLOWED_USERS." >&2
   fi
+fi
+
+MCP_SERVER_PATH="${MCP_SERVER_PATH:-/app/mcp-server/dist/index.js}"
+if [[ -f "$MCP_SERVER_PATH" ]]; then
+  echo "[bootstrap] Starting MCP server from ${MCP_SERVER_PATH}..."
+  node "$MCP_SERVER_PATH" &
+  MCP_PID=$!
+  echo "[bootstrap] MCP server started with PID ${MCP_PID}"
+else
+  echo "[bootstrap] WARNING: MCP server not found at ${MCP_SERVER_PATH}. Skipping." >&2
 fi
 
 echo "[bootstrap] Starting Hermes gateway..."
