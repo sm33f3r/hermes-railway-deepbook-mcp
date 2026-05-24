@@ -42,6 +42,8 @@ COPY --from=builder /opt/hermes-agent /opt/hermes-agent
 
 WORKDIR /app
 COPY scripts/entrypoint.sh /app/scripts/entrypoint.sh
+COPY mcp-server/ /app/mcp-server/
+RUN cd /app/mcp-server && npm install && npm run build && npm prune --omit=dev
 RUN chmod +x /app/scripts/entrypoint.sh
 
 ENTRYPOINT ["tini", "--"]
