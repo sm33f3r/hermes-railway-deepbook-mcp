@@ -17,7 +17,7 @@ ENV PATH="/opt/venv/bin:${PATH}"
 
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir websockets -e "/opt/hermes-agent[messaging,cron,cli,pty]"
-pip install --no-cache-dir 'hermes-agent[mcp]'
+RUN pip install --no-cache-dir 'hermes-agent[mcp]'
 
 
 FROM python:3.11-slim
