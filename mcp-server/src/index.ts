@@ -1,6 +1,6 @@
 /**
  * DeepBook MCP Server entry point.
- * Phase 2: Wire market data tools and DeepBook client.
+* Phase 3: Wire market data and indicator tools.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -11,6 +11,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { initClient } from './client.js';
 import { marketDataTools, marketDataHandlers } from './tools/market-data.js';
+import { indicatorTools, indicatorHandlers } from './tools/indicators.js';
 import { config } from './config.js';
 
 async function main() {
@@ -31,12 +32,12 @@ async function main() {
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
-        tools: marketDataTools,
+        tools: [...marketDataTools, ...indicatorTools],
       };
     });
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const handler = marketDataHandlers[request.params.name];
+      const handler = { ...marketDataHandlers, ...indicatorHandlers }[request.params.name];
       if (!handler) {
         throw new Error(`Unknown tool: ${request.params.name}`);
       }
@@ -47,7 +48,7 @@ async function main() {
     await server.connect(transport);
 
     process.stderr.write(`[deepbook-mcp] Server ready. Network: ${config.network}\n`);
-    process.stderr.write(`[deepbook-mcp] Tools registered: ${marketDataTools.length}\n`);
+    process.stderr.write(`[deepbook-mcp] Tools registered: ${marketDataTools.length + indicatorTools.length}\n`);
   } catch (error) {
     process.stderr.write(`[deepbook-mcp] Fatal: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exit(1);
