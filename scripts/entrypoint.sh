@@ -162,6 +162,29 @@ ensure_model_in_config() {
     "$model" "$provider" >> "$CONFIG_FILE"
 }
 
+ensure_mcp_config() {
+  if grep -q "^mcp_servers:" "$CONFIG_FILE" 2>/dev/null; then
+    return 0
+  fi
+
+  echo "[bootstrap] Writing MCP server config to ${CONFIG_FILE}"
+  cat >> "$CONFIG_FILE" <<'EOF'
+
+mcp_servers:
+  deepbook:
+    command: node
+    args:
+      - /app/mcp-server/dist/index.js
+    env:
+      SUI_NETWORK: mainnet
+      ALLOWED_POOLS: SUI_USDC,DEEP_USDC
+      LOG_LEVEL: info
+    tools:
+      resources: false
+      prompts: false
+EOF
+}
+
 migrate_legacy_messaging_cwd() {
   local persisted_cwd legacy_cwd
 
@@ -184,6 +207,7 @@ validate_platforms
 
 migrate_legacy_messaging_cwd
 ensure_model_in_config
+ensure_mcp_config
 
 echo "[bootstrap] Writing runtime env to ${ENV_FILE}"
 {
@@ -216,16 +240,6 @@ if [[ -z "${TELEGRAM_ALLOWED_USERS:-}${DISCORD_ALLOWED_USERS:-}${SLACK_ALLOWED_U
   if ! is_true "${GATEWAY_ALLOW_ALL_USERS:-}" && ! is_true "${TELEGRAM_ALLOW_ALL_USERS:-}" && ! is_true "${DISCORD_ALLOW_ALL_USERS:-}" && ! is_true "${SLACK_ALLOW_ALL_USERS:-}"; then
     echo "[bootstrap] WARNING: No allowlists configured. Gateway defaults to deny-all; use DM pairing or set *_ALLOWED_USERS." >&2
   fi
-fi
-
-MCP_SERVER_PATH="${MCP_SERVER_PATH:-/app/mcp-server/dist/index.js}"
-if [[ -f "$MCP_SERVER_PATH" ]]; then
-  echo "[bootstrap] Starting MCP server from ${MCP_SERVER_PATH}..."
-  node "$MCP_SERVER_PATH" &
-  MCP_PID=$!
-  echo "[bootstrap] MCP server started with PID ${MCP_PID}"
-else
-  echo "[bootstrap] WARNING: MCP server not found at ${MCP_SERVER_PATH}. Skipping." >&2
 fi
 
 echo "[bootstrap] Starting Hermes gateway..."
