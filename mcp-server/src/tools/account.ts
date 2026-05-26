@@ -1,0 +1,327 @@
+/**
+ * DeepBook account tools for BalanceManager queries.
+ * Read-only account state queries on Sui mainnet.
+ */
+
+import { config, isPoolAllowed } from '../config.js';
+import type { AppState } from '../client.js';
+
+// Common handler signature for all account tools
+export type AccountHandler = (
+  args: Record<string, unknown>,
+  state: AppState
+) => Promise<{ content: { type: string; text: string }[] }>;
+
+// Manager key is always 'MANAGER_1' per SDK configuration
+const MANAGER_KEY = 'MANAGER_1';
+
+/**
+ * Check if balance manager is configured
+ */
+function requireBalanceManager(toolName: string): void {
+  if (!config.balanceManagerAddress) {
+    throw new Error(`${toolName} requires BALANCE_MANAGER_ADDRESS to be configured.`);
+  }
+}
+
+// Tool 1: get_balances
+async function getBalancesHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireBalanceManager('get_balances');
+
+    const { client } = state;
+
+    // Query balances for SUI, USDC, and DEEP
+    const coinKeys = ['SUI', 'USDC', 'DEEP'] as const;
+    const balancePromises = coinKeys.map(coinKey =>
+      client.deepbook.checkManagerBalance(MANAGER_KEY, coinKey)
+    );
+
+    const balanceResults = await Promise.all(balancePromises);
+
+    const balances = coinKeys.map((coinKey, index) => ({
+      coin: coinKey,
+      coinType: balanceResults[index].coinType,
+      balance: balanceResults[index].balance,
+    }));
+
+    const result = { balances };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    throw new Error(`get_balances failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool 2: get_open_orders
+async function getOpenOrdersHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireBalanceManager('get_open_orders');
+
+    const pool = args.pool as string;
+
+    if (!isPoolAllowed(pool)) {
+      throw new Error(`Pool '${pool}' is not in the allowed pools list.`);
+    }
+
+    const { client } = state;
+    const openOrders = await client.deepbook.getAccountOrderDetails(pool, MANAGER_KEY);
+
+    let result: Record<string, any>;
+    if (openOrders.length === 0) {
+      result = {
+        pool,
+        open_orders: [],
+        message: 'No open orders',
+      };
+    } else {
+      result = {
+        pool,
+        open_orders: openOrders,
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    throw new Error(`get_open_orders failed for pool '${args.pool}': ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool 3: get_order
+async function getOrderHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireBalanceManager('get_order');
+
+    const pool = args.pool as string;
+    const orderId = args.order_id as string;
+
+    if (!isPoolAllowed(pool)) {
+      throw new Error(`Pool '${pool}' is not in the allowed pools list.`);
+    }
+
+    const { client } = state;
+    const order = await client.deepbook.getOrderNormalized(pool, orderId);
+
+    let result: Record<string, any>;
+    if (order === null) {
+      result = {
+        pool,
+        order_id: orderId,
+        found: false,
+      };
+    } else {
+      result = {
+        pool,
+        order,
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    throw new Error(`get_order failed for pool '${args.pool}': ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool 4: get_account_state
+async function getAccountStateHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireBalanceManager('get_account_state');
+
+    const pool = args.pool as string;
+
+    if (!isPoolAllowed(pool)) {
+      throw new Error(`Pool '${pool}' is not in the allowed pools list.`);
+    }
+
+    const { client } = state;
+    const accountState = await client.deepbook.account(pool, MANAGER_KEY);
+
+    // Map SDK response to expected output format
+    // The SDK returns snake_case fields based on the TypeScript error
+    const accountStateAny = accountState as any;
+    const result = {
+      pool,
+      epoch: accountStateAny.epoch,
+      taker_volume: accountStateAny.taker_volume,
+      maker_volume: accountStateAny.maker_volume,
+      active_stake: accountStateAny.active_stake,
+      unclaimed_rebates: {
+        base: accountStateAny.unclaimed_rebates?.base ?? 0,
+        quote: accountStateAny.unclaimed_rebates?.quote ?? 0,
+        deep: accountStateAny.unclaimed_rebates?.deep ?? 0,
+      },
+      settled_balances: {
+        base: accountStateAny.settled_balances?.base ?? 0,
+        quote: accountStateAny.settled_balances?.quote ?? 0,
+        deep: accountStateAny.settled_balances?.deep ?? 0,
+      },
+      owed_balances: {
+        base: accountStateAny.owed_balances?.base ?? 0,
+        quote: accountStateAny.owed_balances?.quote ?? 0,
+        deep: accountStateAny.owed_balances?.deep ?? 0,
+      },
+    };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    throw new Error(`get_account_state failed for pool '${args.pool}': ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool 5: get_locked_balance
+async function getLockedBalanceHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireBalanceManager('get_locked_balance');
+
+    const pool = args.pool as string;
+
+    if (!isPoolAllowed(pool)) {
+      throw new Error(`Pool '${pool}' is not in the allowed pools list.`);
+    }
+
+    const { client } = state;
+    const lockedBalance = await client.deepbook.lockedBalance(pool, MANAGER_KEY);
+
+    const result = {
+      pool,
+      base: lockedBalance.base,
+      quote: lockedBalance.quote,
+      deep: lockedBalance.deep,
+    };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    throw new Error(`get_locked_balance failed for pool '${args.pool}': ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool definitions array
+export const accountTools = [
+  {
+    name: 'get_balances',
+    description: 'Get SUI, USDC, and DEEP balances from the BalanceManager.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_open_orders',
+    description: 'Get all open orders for a pool from the BalanceManager.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pool: {
+          type: 'string',
+          description: 'Pool key, e.g. SUI_USDC or DEEP_USDC',
+        },
+      },
+      required: ['pool'],
+    },
+  },
+  {
+    name: 'get_order',
+    description: 'Get details of a specific order by ID.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pool: {
+          type: 'string',
+          description: 'Pool key, e.g. SUI_USDC or DEEP_USDC',
+        },
+        order_id: {
+          type: 'string',
+          description: 'Order ID to look up',
+        },
+      },
+      required: ['pool', 'order_id'],
+    },
+  },
+  {
+    name: 'get_account_state',
+    description: 'Get full account state for a pool (epoch, volumes, stake, balances).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pool: {
+          type: 'string',
+          description: 'Pool key, e.g. SUI_USDC or DEEP_USDC',
+        },
+      },
+      required: ['pool'],
+    },
+  },
+  {
+    name: 'get_locked_balance',
+    description: 'Get locked base, quote, and DEEP balances for a pool.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pool: {
+          type: 'string',
+          description: 'Pool key, e.g. SUI_USDC or DEEP_USDC',
+        },
+      },
+      required: ['pool'],
+    },
+  },
+];
+
+// Handler mapping
+export const accountHandlers: Record<string, AccountHandler> = {
+  get_balances: getBalancesHandler,
+  get_open_orders: getOpenOrdersHandler,
+  get_order: getOrderHandler,
+  get_account_state: getAccountStateHandler,
+  get_locked_balance: getLockedBalanceHandler,
+};
