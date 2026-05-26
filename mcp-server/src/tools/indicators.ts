@@ -4,14 +4,14 @@
  */
 
 import { isPoolAllowed } from '../config.js';
-import type { AppClient } from '../client.js';
+import type { AppState } from '../client.js';
 import type { Candle } from '../utils/indicators.js';
 import { rsi, macd, bollingerBands, ema } from '../utils/indicators.js';
 
 // Common handler signature for consistency with other tools
 export type IndicatorHandler = (
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ) => Promise<{ content: { type: string; text: string }[] }>;
 
 // Volume normalisation scalars by pool
@@ -84,9 +84,10 @@ async function fetchCandles(pool: string, interval: string): Promise<Candle[]> {
 // Main tool handler
 async function getTechnicalAnalysisHandler(
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ): Promise<{ content: { type: string; text: string }[] }> {
   try {
+    // Client not used in this tool (fetches from HTTP API), but signature must be consistent
     const pool = args.pool as string;
     const interval = (args.interval as string) || '1h';
 

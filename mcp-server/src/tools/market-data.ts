@@ -4,12 +4,12 @@
  */
 
 import { config, isPoolAllowed } from '../config.js';
-import type { AppClient } from '../client.js';
+import type { AppState } from '../client.js';
 
 // Common handler signature for all tools
 export type MarketDataHandler = (
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ) => Promise<{ content: { type: string; text: string }[] }>;
 
 /**
@@ -24,9 +24,10 @@ function validatePool(pool: string): void {
 // Tool 1: get_mid_price
 async function getMidPriceHandler(
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ): Promise<{ content: { type: string; text: string }[] }> {
   try {
+    const { client } = state;
     const pool = args.pool as string;
     validatePool(pool);
 
@@ -54,9 +55,10 @@ async function getMidPriceHandler(
 // Tool 2: get_orderbook_depth
 async function getOrderbookDepthHandler(
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ): Promise<{ content: { type: string; text: string }[] }> {
   try {
+    const { client } = state;
     const pool = args.pool as string;
     const ticks = (args.ticks as number) || 10;
 
@@ -98,9 +100,10 @@ async function getOrderbookDepthHandler(
 // Tool 3: get_quote_for_base
 async function getQuoteForBaseHandler(
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ): Promise<{ content: { type: string; text: string }[] }> {
   try {
+    const { client } = state;
     const pool = args.pool as string;
     const baseQuantity = args.base_quantity as number;
 
@@ -131,9 +134,10 @@ async function getQuoteForBaseHandler(
 // Tool 4: get_base_for_quote
 async function getBaseForQuoteHandler(
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ): Promise<{ content: { type: string; text: string }[] }> {
   try {
+    const { client } = state;
     const pool = args.pool as string;
     const quoteQuantity = args.quote_quantity as number;
 
@@ -164,9 +168,10 @@ async function getBaseForQuoteHandler(
 // Tool 5: get_pool_trade_params
 async function getPoolTradeParamsHandler(
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ): Promise<{ content: { type: string; text: string }[] }> {
   try {
+    const { client } = state;
     const pool = args.pool as string;
     validatePool(pool);
 
@@ -195,9 +200,10 @@ async function getPoolTradeParamsHandler(
 // Tool 6: get_pool_book_params
 async function getPoolBookParamsHandler(
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ): Promise<{ content: { type: string; text: string }[] }> {
   try {
+    const { client } = state;
     const pool = args.pool as string;
     validatePool(pool);
 
@@ -227,9 +233,10 @@ async function getPoolBookParamsHandler(
 // Tool 7: get_pool_deep_price
 async function getPoolDeepPriceHandler(
   args: Record<string, unknown>,
-  client: AppClient
+  state: AppState
 ): Promise<{ content: { type: string; text: string }[] }> {
   try {
+    const { client } = state;
     const pool = args.pool as string;
     validatePool(pool);
 
@@ -262,7 +269,7 @@ async function getPoolDeepPriceHandler(
 // Tool 8: list_supported_pools
 async function listSupportedPoolsHandler(
   _args: Record<string, unknown>,
-  _client: AppClient
+  _state: AppState
 ): Promise<{ content: { type: string; text: string }[] }> {
   try {
     const result = {

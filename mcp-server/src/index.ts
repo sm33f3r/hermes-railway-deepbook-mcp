@@ -42,7 +42,7 @@ async function main() {
       if (!handler) {
         throw new Error(`Unknown tool: ${request.params.name}`);
       }
-      return handler(request.params.arguments ?? {}, client);
+      return handler(request.params.arguments ?? {}, state);
     });
 
     const transport = new StdioServerTransport();
