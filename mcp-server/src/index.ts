@@ -16,7 +16,8 @@ import { config } from './config.js';
 
 async function main() {
   try {
-    const client = await initClient();
+    const state = await initClient();
+    const { client } = state;
 
     const server = new Server(
       {
