@@ -16,6 +16,8 @@ export interface Config {
   rpcUrl: string;
   allowedPools: string[];
   logLevel: LogLevel;
+  privateKey: string | null;
+  balanceManagerAddress: string | null;
 }
 
 /**
@@ -95,6 +97,41 @@ function validateRpcUrl(envValue: string | undefined): string {
 let validatedConfig: Config | null = null;
 
 /**
+ * Validate SUI_PRIVATE_KEY environment variable.
+ * Must begin with 'suiprivkey' if set.
+ * Returns null if not set.
+ */
+function validatePrivateKey(envValue: string | undefined): string | null {
+  if (!envValue || envValue.trim().length === 0) {
+    return null;
+  }
+  if (!envValue.trim().startsWith('suiprivkey')) {
+    throw new Error(
+      'Invalid SUI_PRIVATE_KEY: must be a Bech32-encoded Ed25519 key starting with "suiprivkey".'
+    );
+  }
+  return envValue.trim();
+}
+
+/**
+ * Validate BALANCE_MANAGER_ADDRESS environment variable.
+ * Must be a 0x-prefixed 64-character hex string if set.
+ * Returns null if not set.
+ */
+function validateBalanceManagerAddress(envValue: string | undefined): string | null {
+  if (!envValue || envValue.trim().length === 0) {
+    return null;
+  }
+  const addr = envValue.trim();
+  if (!/^0x[0-9a-fA-F]{64}$/.test(addr)) {
+    throw new Error(
+      'Invalid BALANCE_MANAGER_ADDRESS: must be a 0x-prefixed 64-character hex string.'
+    );
+  }
+  return addr;
+}
+
+/**
  * Get the validated configuration.
  * Throws Error if validation fails.
  * This is called lazily on first access.
@@ -110,6 +147,8 @@ function getValidatedConfig(): Config {
       rpcUrl: validateRpcUrl(process.env.SUI_RPC_URL),
       allowedPools: parseAllowedPools(process.env.ALLOWED_POOLS),
       logLevel: validateLogLevel(process.env.LOG_LEVEL),
+      privateKey: validatePrivateKey(process.env.SUI_PRIVATE_KEY),
+      balanceManagerAddress: validateBalanceManagerAddress(process.env.BALANCE_MANAGER_ADDRESS),
     };
     return validatedConfig;
   } catch (error) {
@@ -134,6 +173,12 @@ export const config: Config = {
   },
   get logLevel(): LogLevel {
     return getValidatedConfig().logLevel;
+  },
+  get privateKey(): string | null {
+    return getValidatedConfig().privateKey;
+  },
+  get balanceManagerAddress(): string | null {
+    return getValidatedConfig().balanceManagerAddress;
   },
 };
 
