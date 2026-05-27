@@ -211,6 +211,10 @@ migrate_legacy_messaging_cwd
 ensure_model_in_config
 ensure_mcp_config
 
+echo "[bootstrap] Building MCP server..."
+cd /app/mcp-server && npm run build
+cd /app
+
 echo "[bootstrap] Writing runtime env to ${ENV_FILE}"
 {
   echo "# Managed by entrypoint.sh"
