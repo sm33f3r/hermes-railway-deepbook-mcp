@@ -1,18 +1,16 @@
 /**
  * DeepBook MCP Server entry point.
-* Phase 3: Wire market data and indicator tools.
+* Phase 3: Wire market data, indicator, and account tools.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  ListToolsRequestSchema,
-  CallToolRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { initClient } from './client.js';
 import { marketDataTools, marketDataHandlers } from './tools/market-data.js';
 import { indicatorTools, indicatorHandlers } from './tools/indicators.js';
 import { config } from './config.js';
+import { accountTools, accountHandlers } from './tools/account.js';
 
 async function main() {
   try {
@@ -33,12 +31,12 @@ async function main() {
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
-        tools: [...marketDataTools, ...indicatorTools],
+        tools: [...marketDataTools, ...indicatorTools, ...accountTools],
       };
     });
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const handler = { ...marketDataHandlers, ...indicatorHandlers }[request.params.name];
+      const handler = { ...marketDataHandlers, ...indicatorHandlers, ...accountHandlers }[request.params.name];
       if (!handler) {
         throw new Error(`Unknown tool: ${request.params.name}`);
       }
@@ -49,7 +47,7 @@ async function main() {
     await server.connect(transport);
 
     process.stderr.write(`[deepbook-mcp] Server ready. Network: ${config.network}\n`);
-    process.stderr.write(`[deepbook-mcp] Tools registered: ${marketDataTools.length + indicatorTools.length}\n`);
+    process.stderr.write(`[deepbook-mcp] Tools registered: ${marketDataTools.length + indicatorTools.length + accountTools.length}\n`);
   } catch (error) {
     process.stderr.write(`[deepbook-mcp] Fatal: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exit(1);
