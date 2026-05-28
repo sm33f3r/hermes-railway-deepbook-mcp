@@ -16,23 +16,6 @@ export function isDryRun(): boolean {
   return config.dryRun;
 }
 
-/**
- * Validate order size against maximum notional limit.
- * @param quantity Order quantity in base asset units
- * @param midPrice Current mid price of the pool
- * @throws Error if quantity * midPrice exceeds maxOrderSizeUsd
- */
-export function checkOrderSize(quantity: number, midPrice: number): void {
-  const notional = quantity * midPrice;
-  const limit = config.maxOrderSizeUsd;
-
-  if (notional > limit) {
-    throw new Error(
-      `Order size check failed: notional $${notional.toFixed(2)} exceeds limit $${limit.toFixed(2)}.\n` +
-      'Split the order into smaller chunks.'
-    );
-  }
-}
 
 /**
  * Enforce sliding window rate limit for write tool calls.

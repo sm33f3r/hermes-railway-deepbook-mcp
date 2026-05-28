@@ -19,7 +19,6 @@ export interface Config {
   privateKey: string | null;
   balanceManagerAddress: string | null;
   dryRun: boolean;
-  maxOrderSizeUsd: number;
   maxOrdersPerMinute: number;
 }
 
@@ -145,26 +144,6 @@ function parseDryRun(envValue: string | undefined): boolean {
   return envValue.trim().toLowerCase() === 'true';
 }
 
-/**
- * Validate MAX_ORDER_SIZE_USD environment variable.
- * Default: 100. Must be a finite positive number if set.
- */
-function validateMaxOrderSizeUsd(envValue: string | undefined): number {
-  const defaultValue = 100;
-
-  if (!envValue) {
-    return defaultValue;
-  }
-
-  const value = parseFloat(envValue.trim());
-  if (isNaN(value) || !isFinite(value) || value <= 0) {
-    throw new Error(
-      `Invalid MAX_ORDER_SIZE_USD value: "${envValue}". Must be a finite positive number.`
-    );
-  }
-
-  return value;
-}
 
 /**
  * Validate MAX_ORDERS_PER_MINUTE environment variable.
@@ -206,8 +185,7 @@ function getValidatedConfig(): Config {
       privateKey: validatePrivateKey(process.env.SUI_PRIVATE_KEY),
       balanceManagerAddress: validateBalanceManagerAddress(process.env.BALANCE_MANAGER_ADDRESS),
       dryRun: parseDryRun(process.env.DRY_RUN),
-      maxOrderSizeUsd: validateMaxOrderSizeUsd(process.env.MAX_ORDER_SIZE_USD),
-      maxOrdersPerMinute: validateMaxOrdersPerMinute(process.env.MAX_ORDERS_PER_MINUTE),
+            maxOrdersPerMinute: validateMaxOrdersPerMinute(process.env.MAX_ORDERS_PER_MINUTE),
     };
     return validatedConfig;
   } catch (error) {
@@ -242,10 +220,7 @@ export const config: Config = {
   get dryRun(): boolean {
     return getValidatedConfig().dryRun;
   },
-  get maxOrderSizeUsd(): number {
-    return getValidatedConfig().maxOrderSizeUsd;
-  },
-  get maxOrdersPerMinute(): number {
+    get maxOrdersPerMinute(): number {
     return getValidatedConfig().maxOrdersPerMinute;
   },
 };
