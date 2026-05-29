@@ -91,20 +91,18 @@ async function placeLimitOrderHandler(
 
     // Build transaction
     const tx = new Transaction();
-    // Type assertion: assume placeLimitOrder exists on deepbook client
+    // SDK returns (tx) => void — call it directly on the tx builder
     const deepbookAny = state.client.deepbook as any;
-    tx.add(
-      deepbookAny.placeLimitOrder({
-        poolKey: pool,
-        balanceManagerKey: MANAGER_KEY,
-        clientOrderId: client_order_id,
-        price,
-        quantity,
-        isBid: is_bid,
-        orderType: ORDER_TYPE_MAP[order_type],
-        payWithDeep: pay_with_deep,
-      })
-    );
+    deepbookAny.placeLimitOrder({
+      poolKey: pool,
+      balanceManagerKey: MANAGER_KEY,
+      clientOrderId: client_order_id,
+      price,
+      quantity,
+      isBid: is_bid,
+      orderType: ORDER_TYPE_MAP[order_type],
+      payWithDeep: pay_with_deep,
+    })(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -166,18 +164,16 @@ async function placeMarketOrderHandler(
 
     // Build transaction
     const tx = new Transaction();
-    // Type assertion: assume placeMarketOrder exists on deepbook client
+    // SDK returns (tx) => void — call it directly on the tx builder
     const deepbookAny = state.client.deepbook as any;
-    tx.add(
-      deepbookAny.placeMarketOrder({
-        poolKey: pool,
-        balanceManagerKey: MANAGER_KEY,
-        clientOrderId,
-        quantity,
-        isBid: is_bid,
-        payWithDeep: pay_with_deep,
-      })
-    );
+    deepbookAny.placeMarketOrder({
+      poolKey: pool,
+      balanceManagerKey: MANAGER_KEY,
+      clientOrderId,
+      quantity,
+      isBid: is_bid,
+      payWithDeep: pay_with_deep,
+    })(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -224,8 +220,9 @@ async function cancelOrderHandler(
 
     // Build transaction
     const tx = new Transaction();
+    // SDK returns (tx) => void — call it directly on the tx builder
     const deepbookAny = state.client.deepbook as any;
-    tx.add(deepbookAny.cancelOrder(pool, 'MANAGER_1', order_id));
+    deepbookAny.cancelOrder(pool, MANAGER_KEY, order_id)(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -269,8 +266,9 @@ async function cancelAllOrdersHandler(
 
     // Build transaction
     const tx = new Transaction();
+    // SDK returns (tx) => void — call it directly on the tx builder
     const deepbookAny = state.client.deepbook as any;
-    tx.add(deepbookAny.cancelAllOrders(pool, 'MANAGER_1'));
+    deepbookAny.cancelAllOrders(pool, MANAGER_KEY)(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -315,13 +313,9 @@ async function modifyOrderHandler(
 
     // Build transaction
     const tx = new Transaction();
+    // SDK takes positional args and returns (tx) => void
     const deepbookAny = state.client.deepbook as any;
-    tx.add(deepbookAny.modifyOrder({
-      poolKey: pool,
-      balanceManagerKey: 'MANAGER_1',
-      orderId: order_id,
-      newQuantity: new_quantity,
-    }));
+    deepbookAny.modifyOrder(pool, MANAGER_KEY, order_id, new_quantity)(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -366,11 +360,9 @@ async function withdrawSettledAmountsHandler(
 
     // Build transaction
     const tx = new Transaction();
+    // SDK takes positional args and returns (tx) => void
     const deepbookAny = state.client.deepbook as any;
-    tx.add(deepbookAny.withdrawSettledAmounts({
-      poolKey: pool,
-      balanceManagerKey: 'MANAGER_1',
-    }));
+    deepbookAny.withdrawSettledAmounts(pool, MANAGER_KEY)(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -541,5 +533,4 @@ export const orderHandlers: Record<string, OrderHandler> = {
   cancel_order: cancelOrderHandler,
   cancel_all_orders: cancelAllOrdersHandler,
   modify_order: modifyOrderHandler,
-  withdraw_settled_amounts: withdrawSettledAmountsHandler,
-};
+  withdraw_settled_amounts: withdrawSettledAmountsHandler,};
