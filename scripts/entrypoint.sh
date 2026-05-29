@@ -19,6 +19,19 @@ is_true() {
   esac
 }
 
+ensure_key_file() {
+  if [[ -z "${SUI_PRIVATE_KEY:-}" ]]; then
+    return 0
+  fi
+
+  mkdir -p /data/.secrets
+  chmod 700 /data/.secrets
+  printf '%s' "${SUI_PRIVATE_KEY}" > /data/.secrets/sui_private_key
+  chmod 600 /data/.secrets/sui_private_key
+  unset SUI_PRIVATE_KEY
+  echo "[bootstrap] SUI key written to /data/.secrets/sui_private_key"
+}
+
 validate_platforms() {
   local count=0
 
@@ -199,6 +212,8 @@ migrate_legacy_messaging_cwd() {
     create_default_config "$DEFAULT_TERMINAL_CWD"
   fi
 }
+
+ensure_key_file
 
 if ! has_valid_provider_config; then
   echo "[bootstrap] ERROR: Configure a provider: OPENROUTER_API_KEY, or OPENAI_BASE_URL+OPENAI_API_KEY, or ANTHROPIC_API_KEY." >&2
