@@ -16,7 +16,7 @@ export interface Config {
   rpcUrl: string;
   allowedPools: string[];
   logLevel: LogLevel;
-  privateKey: string | null;
+  suiKeyFile: string | null;
   balanceManagerAddress: string | null;
   dryRun: boolean;
   maxOrdersPerMinute: number;
@@ -98,22 +98,6 @@ function validateRpcUrl(envValue: string | undefined): string {
 // Internal validated configuration cache
 let validatedConfig: Config | null = null;
 
-/**
- * Validate SUI_PRIVATE_KEY environment variable.
- * Must begin with 'suiprivkey' if set.
- * Returns null if not set.
- */
-function validatePrivateKey(envValue: string | undefined): string | null {
-  if (!envValue || envValue.trim().length === 0) {
-    return null;
-  }
-  if (!envValue.trim().startsWith('suiprivkey')) {
-    throw new Error(
-      'Invalid SUI_PRIVATE_KEY: must be a Bech32-encoded Ed25519 key starting with "suiprivkey".'
-    );
-  }
-  return envValue.trim();
-}
 
 /**
  * Validate BALANCE_MANAGER_ADDRESS environment variable.
@@ -131,6 +115,17 @@ function validateBalanceManagerAddress(envValue: string | undefined): string | n
     );
   }
   return addr;
+}
+
+/**
+ * Parse SUI_KEY_FILE environment variable.
+ * Returns trimmed value or null if empty.
+ */
+function parseSuiKeyFile(envValue: string | undefined): string | null {
+  if (!envValue || envValue.trim().length === 0) {
+    return null;
+  }
+  return envValue.trim();
 }
 
 /**
@@ -182,7 +177,7 @@ function getValidatedConfig(): Config {
       rpcUrl: validateRpcUrl(process.env.SUI_RPC_URL),
       allowedPools: parseAllowedPools(process.env.ALLOWED_POOLS),
       logLevel: validateLogLevel(process.env.LOG_LEVEL),
-      privateKey: validatePrivateKey(process.env.SUI_PRIVATE_KEY),
+      suiKeyFile: parseSuiKeyFile(process.env.SUI_KEY_FILE),
       balanceManagerAddress: validateBalanceManagerAddress(process.env.BALANCE_MANAGER_ADDRESS),
       dryRun: parseDryRun(process.env.DRY_RUN),
             maxOrdersPerMinute: validateMaxOrdersPerMinute(process.env.MAX_ORDERS_PER_MINUTE),
@@ -211,8 +206,8 @@ export const config: Config = {
   get logLevel(): LogLevel {
     return getValidatedConfig().logLevel;
   },
-  get privateKey(): string | null {
-    return getValidatedConfig().privateKey;
+  get suiKeyFile(): string | null {
+    return getValidatedConfig().suiKeyFile;
   },
   get balanceManagerAddress(): string | null {
     return getValidatedConfig().balanceManagerAddress;
