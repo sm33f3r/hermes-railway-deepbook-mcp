@@ -70,7 +70,7 @@ async function placeLimitOrderHandler(
     const price = parseFloat(args.price as string);
     const quantity = parseFloat(args.quantity as string);
     const is_bid = args.is_bid as boolean;
-    const client_order_id = args.client_order_id as string;
+    const client_order_id = Date.now();
 
     // Extract optional parameters with defaults
     const order_type = (args.order_type as string) || 'NO_RESTRICTION';
@@ -92,8 +92,8 @@ async function placeLimitOrderHandler(
     // Build transaction
     const tx = new Transaction();
     // SDK returns (tx) => void — call it directly on the tx builder
-    const deepbookAny = state.client.deepbook as any;
-    deepbookAny.placeLimitOrder({
+    const dbContract = state.client.deepbook.deepBook as any;
+    dbContract.placeLimitOrder({
       poolKey: pool,
       balanceManagerKey: MANAGER_KEY,
       clientOrderId: client_order_id,
@@ -160,13 +160,13 @@ async function placeMarketOrderHandler(
     }
 
     // Generate client order ID
-    const clientOrderId = Date.now().toString();
+    const clientOrderId = Date.now();
 
     // Build transaction
     const tx = new Transaction();
     // SDK returns (tx) => void — call it directly on the tx builder
-    const deepbookAny = state.client.deepbook as any;
-    deepbookAny.placeMarketOrder({
+    const dbContract = state.client.deepbook.deepBook as any;
+    dbContract.placeMarketOrder({
       poolKey: pool,
       balanceManagerKey: MANAGER_KEY,
       clientOrderId,
@@ -221,8 +221,8 @@ async function cancelOrderHandler(
     // Build transaction
     const tx = new Transaction();
     // SDK returns (tx) => void — call it directly on the tx builder
-    const deepbookAny = state.client.deepbook as any;
-    deepbookAny.cancelOrder(pool, MANAGER_KEY, order_id)(tx);
+    const dbContract = state.client.deepbook.deepBook as any;
+    dbContract.cancelOrder(pool, MANAGER_KEY, order_id)(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -267,8 +267,8 @@ async function cancelAllOrdersHandler(
     // Build transaction
     const tx = new Transaction();
     // SDK returns (tx) => void — call it directly on the tx builder
-    const deepbookAny = state.client.deepbook as any;
-    deepbookAny.cancelAllOrders(pool, MANAGER_KEY)(tx);
+    const dbContract = state.client.deepbook.deepBook as any;
+    dbContract.cancelAllOrders(pool, MANAGER_KEY)(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -314,8 +314,8 @@ async function modifyOrderHandler(
     // Build transaction
     const tx = new Transaction();
     // SDK takes positional args and returns (tx) => void
-    const deepbookAny = state.client.deepbook as any;
-    deepbookAny.modifyOrder(pool, MANAGER_KEY, order_id, new_quantity)(tx);
+    const dbContract = state.client.deepbook.deepBook as any;
+    dbContract.modifyOrder(pool, MANAGER_KEY, order_id, new_quantity)(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -361,8 +361,8 @@ async function withdrawSettledAmountsHandler(
     // Build transaction
     const tx = new Transaction();
     // SDK takes positional args and returns (tx) => void
-    const deepbookAny = state.client.deepbook as any;
-    deepbookAny.withdrawSettledAmounts(pool, MANAGER_KEY)(tx);
+    const dbContract = state.client.deepbook.deepBook as any;
+    dbContract.withdrawSettledAmounts(pool, MANAGER_KEY)(tx);
 
     // Execute transaction
     const result = await executeTransaction(tx, state);
@@ -410,10 +410,6 @@ export const orderTools = [
           type: 'boolean',
           description: 'true for bid (buy), false for ask (sell)',
         },
-        client_order_id: {
-          type: 'string',
-          description: 'Client-generated unique order identifier',
-        },
         order_type: {
           type: 'string',
           description: 'Order type: NO_RESTRICTION, IMMEDIATE_OR_CANCEL, FILL_OR_KILL, POST_ONLY',
@@ -426,7 +422,7 @@ export const orderTools = [
           default: true,
         },
       },
-      required: ['pool', 'price', 'quantity', 'is_bid', 'client_order_id'],
+      required: ['pool', 'price', 'quantity', 'is_bid'],
     },
   },
   {
