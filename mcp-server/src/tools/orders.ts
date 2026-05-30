@@ -6,7 +6,6 @@
 import { Transaction } from '@mysten/sui/transactions';
 import { OrderType } from '@mysten/deepbook-v3';
 import { executeTransaction } from '../utils/tx-executor.js';
-import { checkRateLimit, isDryRun } from '../utils/risk-guard.js';
 import { config } from '../config.js';
 import type { AppState } from '../client.js';
 
@@ -37,24 +36,8 @@ async function performPrerequisiteChecks(state: AppState): Promise<void> {
   if (!state.keypair) {
     throw new Error('Cannot place order: MCP server is in read-only mode.');
   }
-  checkRateLimit();
 }
 
-/**
- * Format dry run response
- */
-function createDryRunResponse(params: Record<string, unknown>): { content: { type: string; text: string }[] } {
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        dry_run: true,
-        tx_digest: 'DRY_RUN',
-        ...params,
-      }, null, 2)
-    }]
-  };
-}
 
 // Tool 1: place_limit_order handler
 async function placeLimitOrderHandler(
@@ -76,19 +59,7 @@ async function placeLimitOrderHandler(
     const order_type = (args.order_type as string) || 'NO_RESTRICTION';
     const pay_with_deep = args.pay_with_deep !== undefined ? (args.pay_with_deep as boolean) : true;
 
-    // Dry run check
-    if (isDryRun()) {
-      return createDryRunResponse({
-        pool,
-        price,
-        quantity,
-        is_bid,
-        order_type,
-        client_order_id,
-        pay_with_deep,
-      });
-    }
-
+    
     // Build transaction
     const tx = new Transaction();
     // SDK returns (tx) => void — call it directly on the tx builder
@@ -149,16 +120,7 @@ async function placeMarketOrderHandler(
     // Extract optional parameters with defaults
     const pay_with_deep = args.pay_with_deep !== undefined ? (args.pay_with_deep as boolean) : true;
 
-    // Dry run check
-    if (isDryRun()) {
-      return createDryRunResponse({
-        pool,
-        quantity,
-        is_bid,
-        pay_with_deep,
-      });
-    }
-
+    
     // Generate client order ID
     const clientOrderId = Date.now();
 
@@ -213,11 +175,7 @@ async function cancelOrderHandler(
     const pool = args.pool as string;
     const order_id = args.order_id as number;
 
-    // Dry run check
-    if (isDryRun()) {
-      return createDryRunResponse({ pool, order_id });
-    }
-
+    
     // Build transaction
     const tx = new Transaction();
     // SDK returns (tx) => void — call it directly on the tx builder
@@ -258,11 +216,6 @@ async function cancelAllOrdersHandler(
 
     // Extract parameters
     const pool = args.pool as string;
-
-    // Dry run check
-    if (isDryRun()) {
-      return createDryRunResponse({ pool });
-    }
 
     // Build transaction
     const tx = new Transaction();
@@ -306,11 +259,6 @@ async function modifyOrderHandler(
     const order_id = args.order_id as number;
     const new_quantity = args.new_quantity as number;
 
-    // Dry run check
-    if (isDryRun()) {
-      return createDryRunResponse({ pool, order_id, new_quantity });
-    }
-
     // Build transaction
     const tx = new Transaction();
     // SDK takes positional args and returns (tx) => void
@@ -352,11 +300,6 @@ async function withdrawSettledAmountsHandler(
 
     // Extract parameters
     const pool = args.pool as string;
-
-    // Dry run check
-    if (isDryRun()) {
-      return createDryRunResponse({ pool });
-    }
 
     // Build transaction
     const tx = new Transaction();

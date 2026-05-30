@@ -18,8 +18,6 @@ export interface Config {
   logLevel: LogLevel;
   suiKeyFile: string | null;
   balanceManagerAddress: string | null;
-  dryRun: boolean;
-  maxOrdersPerMinute: number;
 }
 
 /**
@@ -128,38 +126,6 @@ function parseSuiKeyFile(envValue: string | undefined): string | null {
   return envValue.trim();
 }
 
-/**
- * Parse DRY_RUN environment variable.
- * 'true' (case-insensitive) maps to true; anything else maps to false.
- */
-function parseDryRun(envValue: string | undefined): boolean {
-  if (!envValue) {
-    return false;
-  }
-  return envValue.trim().toLowerCase() === 'true';
-}
-
-
-/**
- * Validate MAX_ORDERS_PER_MINUTE environment variable.
- * Default: 10. Must be a positive integer if set.
- */
-function validateMaxOrdersPerMinute(envValue: string | undefined): number {
-  const defaultValue = 10;
-
-  if (!envValue) {
-    return defaultValue;
-  }
-
-  const value = parseFloat(envValue.trim());
-  if (isNaN(value) || !isFinite(value) || value < 1 || Math.floor(value) !== value) {
-    throw new Error(
-      `Invalid MAX_ORDERS_PER_MINUTE value: "${envValue}". Must be a positive integer (>= 1).`
-    );
-  }
-
-  return value;
-}
 
 /**
  * Get the validated configuration.
@@ -179,8 +145,6 @@ function getValidatedConfig(): Config {
       logLevel: validateLogLevel(process.env.LOG_LEVEL),
       suiKeyFile: parseSuiKeyFile(process.env.SUI_KEY_FILE),
       balanceManagerAddress: validateBalanceManagerAddress(process.env.BALANCE_MANAGER_ADDRESS),
-      dryRun: parseDryRun(process.env.DRY_RUN),
-            maxOrdersPerMinute: validateMaxOrdersPerMinute(process.env.MAX_ORDERS_PER_MINUTE),
     };
     return validatedConfig;
   } catch (error) {
@@ -211,12 +175,6 @@ export const config: Config = {
   },
   get balanceManagerAddress(): string | null {
     return getValidatedConfig().balanceManagerAddress;
-  },
-  get dryRun(): boolean {
-    return getValidatedConfig().dryRun;
-  },
-    get maxOrdersPerMinute(): number {
-    return getValidatedConfig().maxOrdersPerMinute;
   },
 };
 
