@@ -245,6 +245,60 @@ async function getLockedBalanceHandler(
   }
 }
 
+// Tool 6: get_wallet_balance
+async function getWalletBalanceHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    const { client, keypair } = state;
+
+    if (!keypair) {
+      throw new Error('get_wallet_balance requires signing mode (SUI_PRIVATE_KEY configured).');
+    }
+
+    const address = keypair.toSuiAddress();
+
+    const COIN_TYPES: Record<string, string> = {
+      SUI: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+      USDC: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
+      DEEP: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
+    };
+
+    const balances: { coin: string; coinType: string; balance: string }[] = [];
+
+    for (const [coinKey, coinType] of Object.entries(COIN_TYPES)) {
+      const suiClient = client as any;
+      const response = await suiClient.getBalance({
+        owner: address,
+        coinType,
+      });
+      const rawBalance = response?.balance?.balance ?? '0';
+      balances.push({
+        coin: coinKey,
+        coinType,
+        balance: rawBalance,
+      });
+    }
+
+    const result = {
+      address,
+      balances,
+    };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    throw new Error(`get_wallet_balance failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 // Tool definitions array
 export const accountTools = [
   {
@@ -315,6 +369,14 @@ export const accountTools = [
       required: ['pool'],
     },
   },
+  {
+    name: 'get_wallet_balance',
+    description: 'Get SUI, USDC, and DEEP balances from the raw wallet address (on-chain, not BalanceManager). Returns the total balance for each coin type owned by the wallet.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 // Handler mapping
@@ -324,4 +386,5 @@ export const accountHandlers: Record<string, AccountHandler> = {
   get_order: getOrderHandler,
   get_account_state: getAccountStateHandler,
   get_locked_balance: getLockedBalanceHandler,
+  get_wallet_balance: getWalletBalanceHandler,
 };

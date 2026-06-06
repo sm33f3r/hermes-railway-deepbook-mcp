@@ -329,6 +329,123 @@ async function withdrawSettledAmountsHandler(
   }
 }
 
+// Tool 7: deposit handler
+async function depositHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    await performPrerequisiteChecks(state);
+
+    const coinKey = args.coin_key as string;
+    const amount = parseFloat(args.amount as string);
+
+    if (!['SUI', 'USDC', 'DEEP'].includes(coinKey)) {
+      throw new Error(`Invalid coin_key: '${coinKey}'. Must be SUI, USDC, or DEEP.`);
+    }
+
+    const tx = new Transaction();
+    const balanceManager = state.client.deepbook.balanceManager as any;
+    balanceManager.depositIntoManager(MANAGER_KEY, coinKey, amount)(tx);
+
+    const result = await executeTransaction(tx, state);
+
+    const response = {
+      success: true,
+      tx_digest: result.tx_digest,
+      coin_key: coinKey,
+      amount,
+      dry_run: false,
+    };
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(response, null, 2)
+      }]
+    };
+  } catch (err) {
+    throw new Error(`deposit failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool 8: deposit_all handler
+async function depositAllHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    await performPrerequisiteChecks(state);
+
+    const { client, keypair } = state;
+
+    const coinKey = args.coin_key as string;
+    if (!['SUI', 'USDC', 'DEEP'].includes(coinKey)) {
+      throw new Error(`Invalid coin_key: '${coinKey}'. Must be SUI, USDC, or DEEP.`);
+    }
+
+    const COIN_TYPES: Record<string, string> = {
+      SUI: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+      USDC: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
+      DEEP: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
+    };
+
+    const address = keypair!.toSuiAddress();
+    const suiClient = client as any;
+    const balanceResp = await suiClient.getBalance({
+      owner: address,
+      coinType: COIN_TYPES[coinKey],
+    });
+    const rawBalance = balanceResp?.balance?.balance ?? '0';
+    const balanceNum = parseFloat(rawBalance);
+
+    let amountToDeposit: number;
+    if (coinKey === 'SUI') {
+      const gasReserve = 500_000_000;
+      amountToDeposit = Math.max(0, Math.floor((balanceNum - gasReserve) / 1_000_000_000));
+    } else {
+      amountToDeposit = Math.floor(balanceNum / 1_000_000);
+    }
+
+    if (amountToDeposit <= 0) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: false,
+            coin_key: coinKey,
+            available_raw: rawBalance,
+            message: 'No available balance to deposit after gas reserve.',
+          }, null, 2)
+        }]
+      };
+    }
+
+    const tx = new Transaction();
+    const balanceManager = state.client.deepbook.balanceManager as any;
+    balanceManager.depositIntoManager(MANAGER_KEY, coinKey, amountToDeposit)(tx);
+
+    const result = await executeTransaction(tx, state);
+
+    const response = {
+      success: true,
+      tx_digest: result.tx_digest,
+      coin_key: coinKey,
+      amount: amountToDeposit,
+      dry_run: false,
+    };
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(response, null, 2)
+      }]
+    };
+  } catch (err) {
+    throw new Error(`deposit_all failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 // Tool definitions
 export const orderTools = [
   {
@@ -463,6 +580,40 @@ export const orderTools = [
       required: ['pool'],
     },
   },
+  {
+    name: 'deposit',
+    description: 'Deposit SUI, USDC, or DEEP from the wallet into the BalanceManager so it can be used for trading.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        coin_key: {
+          type: 'string',
+          description: 'Coin key to deposit — one of SUI, USDC, DEEP',
+          enum: ['SUI', 'USDC', 'DEEP'],
+        },
+        amount: {
+          type: 'number',
+          description: 'Amount to deposit in whole coin units',
+        },
+      },
+      required: ['coin_key', 'amount'],
+    },
+  },
+  {
+    name: 'deposit_all',
+    description: 'Deposit the entire available wallet balance of a coin into the BalanceManager (keeps 0.5 SUI for gas).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        coin_key: {
+          type: 'string',
+          description: 'Coin key to deposit — one of SUI, USDC, DEEP',
+          enum: ['SUI', 'USDC', 'DEEP'],
+        },
+      },
+      required: ['coin_key'],
+    },
+  },
 ];
 
 // Handler mapping
@@ -472,4 +623,7 @@ export const orderHandlers: Record<string, OrderHandler> = {
   cancel_order: cancelOrderHandler,
   cancel_all_orders: cancelAllOrdersHandler,
   modify_order: modifyOrderHandler,
-  withdraw_settled_amounts: withdrawSettledAmountsHandler,};
+  withdraw_settled_amounts: withdrawSettledAmountsHandler,
+  deposit: depositHandler,
+  deposit_all: depositAllHandler,
+};
