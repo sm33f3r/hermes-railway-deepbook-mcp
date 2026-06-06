@@ -13,6 +13,7 @@ import { config } from './config.js';
 import { accountTools, accountHandlers } from './tools/account.js';
 import { orderTools, orderHandlers } from './tools/orders.js';
 import { swapTools, swapHandlers } from './tools/swaps.js';
+import { flashLoanTools, flashLoanHandlers } from './tools/flashLoans.js';
 
 async function main() {
   try {
@@ -33,12 +34,12 @@ async function main() {
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
-        tools: [...marketDataTools, ...indicatorTools, ...accountTools, ...orderTools, ...swapTools],
+        tools: [...marketDataTools, ...indicatorTools, ...accountTools, ...orderTools, ...swapTools, ...flashLoanTools],
       };
     });
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const handler = { ...marketDataHandlers, ...indicatorHandlers, ...accountHandlers, ...orderHandlers, ...swapHandlers }[request.params.name];
+      const handler = { ...marketDataHandlers, ...indicatorHandlers, ...accountHandlers, ...orderHandlers, ...swapHandlers, ...flashLoanHandlers }[request.params.name];
       if (!handler) {
         throw new Error(`Unknown tool: ${request.params.name}`);
       }
@@ -49,7 +50,7 @@ async function main() {
     await server.connect(transport);
 
     process.stderr.write(`[deepbook-mcp] Server ready. Network: ${config.network}\n`);
-    process.stderr.write(`[deepbook-mcp] Tools registered: ${marketDataTools.length + indicatorTools.length + accountTools.length + orderTools.length + swapTools.length}\n`);
+    process.stderr.write(`[deepbook-mcp] Tools registered: ${marketDataTools.length + indicatorTools.length + accountTools.length + orderTools.length + swapTools.length + flashLoanTools.length}\n`);
   } catch (error) {
     process.stderr.write(`[deepbook-mcp] Fatal: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exit(1);
