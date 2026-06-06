@@ -12,6 +12,7 @@ interface FlashLoanOperation {
   type: 'swap_base_for_quote' | 'swap_quote_for_base';
   pool: string;
   pct: number;
+  deepAmount?: number;
 }
 
 async function executeFlashLoanHandler(
@@ -102,7 +103,7 @@ async function executeFlashLoanHandler(
         const [baseResult, quoteResult, deepResult] = deepbookContract.swapExactBaseForQuote({
           poolKey: operation.pool,
           amount,
-          deepAmount: 0,
+          deepAmount: operation.deepAmount ?? 0.000001,
           minOut: 0,
           baseCoin: baseCoin ?? undefined,
         })(tx);
@@ -119,7 +120,7 @@ async function executeFlashLoanHandler(
         const [baseResult, quoteResult, deepResult] = deepbookContract.swapExactQuoteForBase({
           poolKey: operation.pool,
           amount,
-          deepAmount: 0,
+          deepAmount: operation.deepAmount ?? 0.000001,
           minOut: 0,
           quoteCoin: quoteCoin ?? undefined,
         })(tx);
