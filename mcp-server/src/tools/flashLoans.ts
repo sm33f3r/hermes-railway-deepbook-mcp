@@ -45,11 +45,28 @@ async function executeFlashLoanHandler(
     }
 
     const tx = new Transaction();
-    const flashLoanContract = (state.client.deepbook as any).flashLoan;
+    const flashLoanContract = (state.client.deepbook as any).flashLoans;
     const deepbookContract = (state.client.deepbook as any).deepBook;
     const senderAddress = state.keypair.toSuiAddress();
 
+    // Pool asset lookup — matches SDK mainnetPools
+    const POOL_ASSETS: Record<string, { base: string; quote: string }> = {
+      DEEP_SUI:   { base: 'DEEP',  quote: 'SUI'  },
+      SUI_USDC:   { base: 'SUI',   quote: 'USDC' },
+      DEEP_USDC:  { base: 'DEEP',  quote: 'USDC' },
+      WUSDT_USDC: { base: 'WUSDT', quote: 'USDC' },
+      WUSDC_USDC: { base: 'WUSDC', quote: 'USDC' },
+      BETH_USDC:  { base: 'BETH',  quote: 'USDC' },
+      NS_USDC:    { base: 'NS',    quote: 'USDC' },
+      NS_SUI:     { base: 'NS',    quote: 'SUI'  },
+      TYPUS_SUI:  { base: 'TYPUS', quote: 'SUI'  },
+      SUI_AUSD:   { base: 'SUI',   quote: 'AUSD' },
+      AUSD_USDC:  { base: 'AUSD',  quote: 'USDC' },
+      DRF_SUI:    { base: 'DRF',   quote: 'SUI'  },
+    };
+
     // Step 1 — Borrow
+    // After borrowing, exactly one of baseCoin/quoteCoin is set; the other is null.
     let baseCoin: any = null;
     let quoteCoin: any = null;
     let flashLoan: any;
@@ -64,55 +81,81 @@ async function executeFlashLoanHandler(
       flashLoan = loan;
     }
 
-    // Step 2 — Running balance tracking (used only to compute per-step amount arguments)
-    let base_available = borrow_side === 'base' ? borrow_amount : 0;
-    let quote_available = borrow_side === 'quote' ? borrow_amount : 0;
+    // Step 2 — Operations loop
+    //
+    // SDK constraint (verified from source):
+    //   swapExactBaseForQuote — accepts baseCoin only, throws if quoteCoin passed
+    //   swapExactQuoteForBase — accepts quoteCoin only, throws if baseCoin passed
+    //
+    // Each swap returns [baseCoinResult, quoteCoinResult, deepCoinResult].
+    // The coin passed forward to the next hop is whichever result matches the
+    // output asset of this swap. The OTHER result (change coin, near-zero) must
+    // be transferred to sender immediately — leaving it unconsumed causes
+    // UnusedValueWithoutDrop in the PTB.
+    //
+    // deepCoinResult is always transferred to sender (fee rebate or zero change).
 
-    // Step 3 — Operations loop
     for (const operation of operations) {
       if (operation.type === 'swap_base_for_quote') {
-        const amount = base_available * operation.pct / 100;
+        // Input: baseCoin. Output: quoteCoin (proceeds), baseCoin (change), deepCoin (fee change)
+        const amount = borrow_amount * operation.pct / 100;
         const [baseResult, quoteResult, deepResult] = deepbookContract.swapExactBaseForQuote({
           poolKey: operation.pool,
           amount,
           deepAmount: 0,
           minOut: 0,
+          baseCoin: baseCoin ?? undefined,
         })(tx);
-        baseCoin = baseResult;
+        // baseResult is change of the input asset — transfer immediately, do not carry forward
+        tx.transferObjects([baseResult], senderAddress);
+        // quoteResult carries the swap proceeds forward
         quoteCoin = quoteResult;
+        baseCoin = null;
+        // deepResult is fee change — always transfer
         tx.transferObjects([deepResult], senderAddress);
-        base_available = base_available * (1 - operation.pct / 100);
       } else {
-        const amount = quote_available * operation.pct / 100;
+        // Input: quoteCoin. Output: baseCoin (proceeds), quoteCoin (change), deepCoin (fee change)
+        const amount = borrow_amount * operation.pct / 100;
         const [baseResult, quoteResult, deepResult] = deepbookContract.swapExactQuoteForBase({
           poolKey: operation.pool,
           amount,
           deepAmount: 0,
           minOut: 0,
+          quoteCoin: quoteCoin ?? undefined,
         })(tx);
-        quoteCoin = quoteResult;
+        // quoteResult is change of the input asset — transfer immediately, do not carry forward
+        tx.transferObjects([quoteResult], senderAddress);
+        // baseResult carries the swap proceeds forward
         baseCoin = baseResult;
+        quoteCoin = null;
+        // deepResult is fee change — always transfer
         tx.transferObjects([deepResult], senderAddress);
-        quote_available = quote_available * (1 - operation.pct / 100);
       }
     }
 
-    // Step 4 — Transfer profit coin to sender (whichever side is NOT being repaid)
-    if (borrow_side === 'base' && quoteCoin !== null) {
-      tx.transferObjects([quoteCoin], senderAddress);
-    }
-    if (borrow_side === 'quote' && baseCoin !== null) {
-      tx.transferObjects([baseCoin], senderAddress);
-    }
+    // Step 3 — Repay the flash loan
+    //
+    // returnBaseAsset / returnQuoteAsset (verified from source):
+    //   - internally calls tx.splitCoins(coinInput, [borrow_amount])
+    //   - sends the split portion to return_flashloan_*
+    //   - returns coinInput (the remainder after split)
+    //
+    // After repayment, the remainder is the profit. Transfer it to sender.
+    // The other coin variable (if non-null) is additional profit — also transfer.
 
-    // Step 5 — Repay the flash loan
     if (borrow_side === 'base') {
-      flashLoanContract.returnBaseAsset(pool, borrow_amount, baseCoin, flashLoan)(tx);
+      // baseCoin must hold the borrowed asset for repayment
+      const remainder = flashLoanContract.returnBaseAsset(pool, borrow_amount, baseCoin, flashLoan)(tx);
+      tx.transferObjects([remainder], senderAddress);
+      if (quoteCoin !== null) tx.transferObjects([quoteCoin], senderAddress);
     } else {
-      flashLoanContract.returnQuoteAsset(pool, borrow_amount, quoteCoin, flashLoan)(tx);
+      // quoteCoin must hold the borrowed asset for repayment
+      const remainder = flashLoanContract.returnQuoteAsset(pool, borrow_amount, quoteCoin, flashLoan)(tx);
+      tx.transferObjects([remainder], senderAddress);
+      if (baseCoin !== null) tx.transferObjects([baseCoin], senderAddress);
     }
 
-    // Step 6 — Execute
+    // Step 4 — Execute
     const result = await executeTransaction(tx, state);
 
     const response = {
@@ -179,7 +222,7 @@ export const flashLoanTools = [
               },
               pct: {
                 type: 'number',
-                description: 'Percentage (1–100) of the available input coin balance to use for this swap',
+                description: 'Percentage (1–100) of the original borrow amount to use for this swap',
               },
             },
             required: ['type', 'pool', 'pct'],
