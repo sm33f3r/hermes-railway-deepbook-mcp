@@ -136,25 +136,27 @@ async function executeFlashLoanHandler(
 
     // Step 3 — Repay the flash loan
     //
-    // returnBaseAsset / returnQuoteAsset (verified from source):
-    //   - internally calls tx.splitCoins(coinInput, [borrow_amount])
-    //   - sends the split portion to return_flashloan_*
-    //   - returns coinInput (the remainder after split)
+    // After a multi-hop swap chain, the borrowed asset may be in either
+    // baseCoin or quoteCoin regardless of borrow_side — the chain migrates
+    // it to whichever variable the final swap outputs it into.
     //
-    // After repayment, the remainder is the profit. Transfer it to sender.
-    // The other coin variable (if non-null) is additional profit — also transfer.
+    // The non-null coin after the loop is always the repayment coin.
+    // The null coin was already transferred to sender as change during the loop.
+    //
+    // returnBaseAsset / returnQuoteAsset split borrow_amount from the coin
+    // and return the remainder (profit). Transfer remainder to sender.
+
+    const repayCoin = baseCoin ?? quoteCoin;
 
     if (borrow_side === 'base') {
-      // baseCoin must hold the borrowed asset for repayment
-      const remainder = flashLoanContract.returnBaseAsset(pool, borrow_amount, baseCoin, flashLoan)(tx);
+      const remainder = flashLoanContract.returnBaseAsset(pool, borrow_amount, repayCoin, flashLoan)(tx);
       tx.transferObjects([remainder], senderAddress);
-      if (quoteCoin !== null) tx.transferObjects([quoteCoin], senderAddress);
     } else {
-      // quoteCoin must hold the borrowed asset for repayment
-      const remainder = flashLoanContract.returnQuoteAsset(pool, borrow_amount, quoteCoin, flashLoan)(tx);
+      const remainder = flashLoanContract.returnQuoteAsset(pool, borrow_amount, repayCoin, flashLoan)(tx);
       tx.transferObjects([remainder], senderAddress);
-      if (baseCoin !== null) tx.transferObjects([baseCoin], senderAddress);
     }
+
+    // Step 4 — Execute
 
     // Step 4 — Execute
     const result = await executeTransaction(tx, state);
