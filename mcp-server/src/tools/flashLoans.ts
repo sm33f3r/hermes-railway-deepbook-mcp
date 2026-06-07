@@ -89,16 +89,18 @@ async function executeFlashLoanHandler(
     //   swapExactQuoteForBase — accepts quoteCoin only, throws if baseCoin passed
     //
     // Each swap returns [baseCoinResult, quoteCoinResult, deepCoinResult].
-    // The coin passed forward to the next hop is whichever result matches the
-    // output asset of this swap. The OTHER result (change coin, near-zero) must
-    // be transferred to sender immediately — leaving it unconsumed causes
-    // UnusedValueWithoutDrop in the PTB.
+    // The proceeds coin is carried forward; the change coin is held in the
+    // other variable. deepCoinResult is always transferred to sender.
     //
-    // deepCoinResult is always transferred to sender (fee rebate or zero change).
+    // Asset tracking (baseAssetKey/quoteAssetKey) follows which asset each
+    // variable holds, so we know which coin to use for repayment later.
+
+    let baseAssetKey: string | null = borrow_side === 'base' ? POOL_ASSETS[pool].base : null;
+    let quoteAssetKey: string | null = borrow_side === 'quote' ? POOL_ASSETS[pool].quote : null;
 
     for (const operation of operations) {
       if (operation.type === 'swap_base_for_quote') {
-        // Input: baseCoin. Output: quoteCoin (proceeds), baseCoin (change), deepCoin (fee change)
+        // Input: baseCoin. Output: quoteCoin (proceeds), baseCoin (change), deepCoin (fee)
         const amount = borrow_amount * operation.pct / 100;
         const [baseResult, quoteResult, deepResult] = deepbookContract.swapExactBaseForQuote({
           poolKey: operation.pool,
@@ -107,15 +109,15 @@ async function executeFlashLoanHandler(
           minOut: 0,
           baseCoin: baseCoin ?? undefined,
         })(tx);
-        // baseResult is change of the input asset — transfer immediately, do not carry forward
-        tx.transferObjects([baseResult], senderAddress);
-        // quoteResult carries the swap proceeds forward
+        // baseResult is change of input asset (same type as before)
+        baseCoin = baseResult;
+        // quoteResult is proceeds — the swap pool's quote asset
         quoteCoin = quoteResult;
-        baseCoin = null;
-        // deepResult is fee change — always transfer
+        quoteAssetKey = POOL_ASSETS[operation.pool].quote;
+        // deepResult is fee change — transfer immediately
         tx.transferObjects([deepResult], senderAddress);
       } else {
-        // Input: quoteCoin. Output: baseCoin (proceeds), quoteCoin (change), deepCoin (fee change)
+        // Input: quoteCoin. Output: baseCoin (proceeds), quoteCoin (change), deepCoin (fee)
         const amount = borrow_amount * operation.pct / 100;
         const [baseResult, quoteResult, deepResult] = deepbookContract.swapExactQuoteForBase({
           poolKey: operation.pool,
@@ -124,29 +126,36 @@ async function executeFlashLoanHandler(
           minOut: 0,
           quoteCoin: quoteCoin ?? undefined,
         })(tx);
-        // quoteResult is change of the input asset — transfer immediately, do not carry forward
-        tx.transferObjects([quoteResult], senderAddress);
-        // baseResult carries the swap proceeds forward
+        // quoteResult is change of input asset (same type as before)
+        quoteCoin = quoteResult;
+        // baseResult is proceeds — the swap pool's base asset
         baseCoin = baseResult;
-        quoteCoin = null;
-        // deepResult is fee change — always transfer
+        baseAssetKey = POOL_ASSETS[operation.pool].base;
+        // deepResult is fee change — transfer immediately
         tx.transferObjects([deepResult], senderAddress);
       }
     }
 
     // Step 3 — Repay the flash loan
     //
-    // After a multi-hop swap chain, the borrowed asset may be in either
-    // baseCoin or quoteCoin regardless of borrow_side — the chain migrates
-    // it to whichever variable the final swap outputs it into.
+    // After the operations loop, both baseCoin and quoteCoin may be populated.
+    // Use POOL_ASSETS to determine which holds the borrowed asset, then call
+    // the appropriate return function. The return function splits the borrow
+    // amount from the coin and returns the remainder (profit).
     //
-    // The non-null coin after the loop is always the repayment coin.
-    // The null coin was already transferred to sender as change during the loop.
-    //
-    // returnBaseAsset / returnQuoteAsset split borrow_amount from the coin
-    // and return the remainder (profit). Transfer remainder to sender.
+    // The other coin (profit from another pool's asset) is transferred to sender.
 
-    const repayCoin = baseCoin ?? quoteCoin;
+    const borrowedKey = borrow_side === 'base' ? POOL_ASSETS[pool].base : POOL_ASSETS[pool].quote;
+
+    let repayCoin: any;
+    let profitCoin: any;
+    if (baseAssetKey === borrowedKey) {
+      repayCoin = baseCoin;
+      profitCoin = quoteCoin;
+    } else {
+      repayCoin = quoteCoin;
+      profitCoin = baseCoin;
+    }
 
     if (borrow_side === 'base') {
       const remainder = flashLoanContract.returnBaseAsset(pool, borrow_amount, repayCoin, flashLoan)(tx);
@@ -155,6 +164,7 @@ async function executeFlashLoanHandler(
       const remainder = flashLoanContract.returnQuoteAsset(pool, borrow_amount, repayCoin, flashLoan)(tx);
       tx.transferObjects([remainder], senderAddress);
     }
+    if (profitCoin !== null) tx.transferObjects([profitCoin], senderAddress);
 
     // Step 4 — Execute
 
