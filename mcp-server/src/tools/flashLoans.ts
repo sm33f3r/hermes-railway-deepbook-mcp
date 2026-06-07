@@ -12,6 +12,8 @@ interface FlashLoanOperation {
   type: 'swap_base_for_quote' | 'swap_quote_for_base';
   pool: string;
   pct: number;
+  /** Optional explicit amount in this pool's asset units. Overrides borrow_amount * pct / 100. */
+  amount?: number;
   deepAmount?: number;
 }
 
@@ -101,7 +103,7 @@ async function executeFlashLoanHandler(
     for (const operation of operations) {
       if (operation.type === 'swap_base_for_quote') {
         // Input: baseCoin. Output: quoteCoin (proceeds), baseCoin (change), deepCoin (fee)
-        const amount = borrow_amount * operation.pct / 100;
+        const amount = operation.amount ?? (borrow_amount * operation.pct / 100);
         const [baseResult, quoteResult, deepResult] = deepbookContract.swapExactBaseForQuote({
           poolKey: operation.pool,
           amount,
@@ -118,7 +120,7 @@ async function executeFlashLoanHandler(
         tx.transferObjects([deepResult], senderAddress);
       } else {
         // Input: quoteCoin. Output: baseCoin (proceeds), quoteCoin (change), deepCoin (fee)
-        const amount = borrow_amount * operation.pct / 100;
+        const amount = operation.amount ?? (borrow_amount * operation.pct / 100);
         const [baseResult, quoteResult, deepResult] = deepbookContract.swapExactQuoteForBase({
           poolKey: operation.pool,
           amount,
@@ -236,6 +238,14 @@ export const flashLoanTools = [
               pct: {
                 type: 'number',
                 description: 'Percentage (1–100) of the original borrow amount to use for this swap',
+              },
+              amount: {
+                type: 'number',
+                description: 'Optional explicit amount in this pool\'s asset units. Overrides borrow_amount * pct / 100. Use for cross-pool hops where the asset type differs from the borrowed asset.',
+              },
+              deepAmount: {
+                type: 'number',
+                description: 'Optional DEEP fee amount. Default 0.000001.',
               },
             },
             required: ['type', 'pool', 'pct'],
