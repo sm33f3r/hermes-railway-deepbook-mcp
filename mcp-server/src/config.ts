@@ -18,6 +18,7 @@ export interface Config {
   logLevel: LogLevel;
   suiKeyFile: string | null;
   balanceManagerAddress: string | null;
+  marginManagerAddress: string | null;
 }
 
 /**
@@ -145,6 +146,7 @@ function getValidatedConfig(): Config {
       logLevel: validateLogLevel(process.env.LOG_LEVEL),
       suiKeyFile: parseSuiKeyFile(process.env.SUI_KEY_FILE),
       balanceManagerAddress: validateBalanceManagerAddress(process.env.BALANCE_MANAGER_ADDRESS),
+      marginManagerAddress: process.env.MARGIN_MANAGER_ADDRESS?.trim() || null,
     };
     return validatedConfig;
   } catch (error) {
@@ -175,6 +177,9 @@ export const config: Config = {
   },
   get balanceManagerAddress(): string | null {
     return getValidatedConfig().balanceManagerAddress;
+  },
+  get marginManagerAddress(): string | null {
+    return getValidatedConfig().marginManagerAddress;
   },
 };
 
