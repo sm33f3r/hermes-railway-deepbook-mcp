@@ -3,7 +3,7 @@
  * Supports read-only mode (no private key) and signing mode (private key present).
  */
 
-import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
+import { deepbook, type DeepBookClient, type MarginManager } from '@mysten/deepbook-v3';
 import type { ClientWithExtensions } from '@mysten/sui/client';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
@@ -61,6 +61,15 @@ export async function initClient(): Promise<AppState> {
       }
     : undefined;
 
+  const marginManagers: Record<string, MarginManager> | undefined = config.marginManagerAddress
+    ? {
+        MARGIN_1: {
+          address: config.marginManagerAddress,
+          poolKey: 'SUI_USDC',
+        },
+      }
+    : undefined;
+
   const client = new SuiGrpcClient({
     network: config.network,
     baseUrl: config.rpcUrl,
@@ -68,6 +77,7 @@ export async function initClient(): Promise<AppState> {
     deepbook({
       address,
       balanceManagers,
+      marginManagers,
     })
   ) as AppClient;
 
