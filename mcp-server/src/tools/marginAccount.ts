@@ -109,7 +109,8 @@ async function getMarginBalancesHandler(
     return {
       content: [{
         type: 'text',
-        text: JSON.stringify(result, null, 2),
+        text: JSON.stringify(result, (_key, value) =>
+          typeof value === 'bigint' ? Number(value) : value, 2),
       }],
     };
   } catch (err) {
@@ -130,7 +131,8 @@ async function getMarginOrdersHandler(
     return {
       content: [{
         type: 'text',
-        text: JSON.stringify({ conditional_order_ids: ids }, null, 2),
+        text: JSON.stringify({ conditional_order_ids: ids }, (_key, value) =>
+          typeof value === 'bigint' ? Number(value) : value, 2),
       }],
     };
   } catch (err) {
