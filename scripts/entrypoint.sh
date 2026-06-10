@@ -201,6 +201,26 @@ mcp_servers:
 EOF
 }
 
+inject_margin_manager_address() {
+  if [[ -z "${MARGIN_MANAGER_ADDRESS:-}" ]]; then
+    return
+  fi
+  if grep -q "MARGIN_MANAGER_ADDRESS" "$CONFIG_FILE" 2>/dev/null; then
+    return
+  fi
+  echo "[bootstrap] Injecting MARGIN_MANAGER_ADDRESS into MCP config"
+  python3 -c "
+import re
+with open('${CONFIG_FILE}', 'r') as f:
+    content = f.read()
+pattern = r'(      BALANCE_MANAGER_ADDRESS: [^\n]+)'
+replacement = r'\1\n      MARGIN_MANAGER_ADDRESS: \"${MARGIN_MANAGER_ADDRESS}\"'
+content = re.sub(pattern, replacement, content)
+with open('${CONFIG_FILE}', 'w') as f:
+    f.write(content)
+"
+}
+
 migrate_legacy_messaging_cwd() {
   local persisted_cwd legacy_cwd
 
@@ -226,6 +246,7 @@ validate_platforms
 migrate_legacy_messaging_cwd
 ensure_model_in_config
 ensure_mcp_config
+inject_margin_manager_address
 
 echo "[bootstrap] Building MCP server..."
 cd /app/mcp-server && npm run build
