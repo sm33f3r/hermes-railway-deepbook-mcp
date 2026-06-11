@@ -76,11 +76,14 @@ async function withdrawMarginHandler(
       throw new Error(`Invalid coin_type: '${coin_type}'. Must be SUI or USDC.`);
     }
 
+    const address = state.keypair!.toSuiAddress();
     const tx = new Transaction();
     if (coin_type === 'SUI') {
-      tx.add(mm.withdrawBase(MARGIN_KEY, amount));
+      const coin = mm.withdrawBase(MARGIN_KEY, amount)(tx);
+      tx.transferObjects([coin], tx.pure.address(address));
     } else {
-      tx.add(mm.withdrawQuote(MARGIN_KEY, amount));
+      const coin = mm.withdrawQuote(MARGIN_KEY, amount)(tx);
+      tx.transferObjects([coin], tx.pure.address(address));
     }
 
     const result = await executeTransaction(tx, state);
