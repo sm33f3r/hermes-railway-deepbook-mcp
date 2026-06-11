@@ -143,6 +143,140 @@ async function getMarginOrdersHandler(
   }
 }
 
+// Tool 5: borrow_base
+async function borrowBaseHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireMarginManager('borrow_base');
+    if (!state.keypair) {
+      throw new Error('borrow_base requires signing mode (SUI_PRIVATE_KEY configured).');
+    }
+
+    const amount = args.amount as number;
+    const mm = (state.client.deepbook as any).marginManager;
+    const address = state.keypair!.toSuiAddress();
+
+    const tx = new Transaction();
+    const coin = mm.borrowBase(MARGIN_KEY, amount)(tx);
+    tx.transferObjects([coin], tx.pure.address(address));
+
+    const result = await executeTransaction(tx, state);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({ success: true, tx_digest: result.tx_digest, asset: 'SUI', amount }, null, 2),
+      }],
+    };
+  } catch (err) {
+    throw new Error(`borrow_base failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool 6: borrow_quote
+async function borrowQuoteHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireMarginManager('borrow_quote');
+    if (!state.keypair) {
+      throw new Error('borrow_quote requires signing mode (SUI_PRIVATE_KEY configured).');
+    }
+
+    const amount = args.amount as number;
+    const mm = (state.client.deepbook as any).marginManager;
+    const address = state.keypair!.toSuiAddress();
+
+    const tx = new Transaction();
+    const coin = mm.borrowQuote(MARGIN_KEY, amount)(tx);
+    tx.transferObjects([coin], tx.pure.address(address));
+
+    const result = await executeTransaction(tx, state);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({ success: true, tx_digest: result.tx_digest, asset: 'USDC', amount }, null, 2),
+      }],
+    };
+  } catch (err) {
+    throw new Error(`borrow_quote failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool 7: repay_base
+async function repayBaseHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireMarginManager('repay_base');
+    if (!state.keypair) {
+      throw new Error('repay_base requires signing mode (SUI_PRIVATE_KEY configured).');
+    }
+
+    const amount = args.amount as number | undefined;
+    const mm = (state.client.deepbook as any).marginManager;
+
+    const tx = new Transaction();
+    tx.add(mm.repayBase(MARGIN_KEY, amount ?? null));
+
+    const result = await executeTransaction(tx, state);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          tx_digest: result.tx_digest,
+          asset: 'SUI',
+          amount: amount ?? null
+        }, null, 2),
+      }],
+    };
+  } catch (err) {
+    throw new Error(`repay_base failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool 8: repay_quote
+async function repayQuoteHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireMarginManager('repay_quote');
+    if (!state.keypair) {
+      throw new Error('repay_quote requires signing mode (SUI_PRIVATE_KEY configured).');
+    }
+
+    const amount = args.amount as number | undefined;
+    const mm = (state.client.deepbook as any).marginManager;
+
+    const tx = new Transaction();
+    tx.add(mm.repayQuote(MARGIN_KEY, amount ?? null));
+
+    const result = await executeTransaction(tx, state);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          tx_digest: result.tx_digest,
+          asset: 'USDC',
+          amount: amount ?? null
+        }, null, 2),
+      }],
+    };
+  } catch (err) {
+    throw new Error(`repay_quote failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 // Tool definitions
 export const marginAccountTools = [
   {
@@ -199,6 +333,62 @@ export const marginAccountTools = [
       properties: {},
     },
   },
+  {
+    name: 'borrow_base',
+    description: 'Borrows SUI against deposited collateral.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        amount: {
+          type: 'number',
+          description: 'Amount to borrow in human-readable units (e.g. 1.0 for 1 SUI)',
+        },
+      },
+      required: ['amount'],
+    },
+  },
+  {
+    name: 'borrow_quote',
+    description: 'Borrows USDC against deposited collateral.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        amount: {
+          type: 'number',
+          description: 'Amount to borrow in human-readable units',
+        },
+      },
+      required: ['amount'],
+    },
+  },
+  {
+    name: 'repay_base',
+    description: 'Repays outstanding SUI debt on the MarginManager.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        amount: {
+          type: 'number',
+          description: 'Amount to repay. If omitted, repays full debt.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'repay_quote',
+    description: 'Repays outstanding USDC debt on the MarginManager.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        amount: {
+          type: 'number',
+          description: 'Amount to repay. If omitted, repays full debt.',
+        },
+      },
+      required: [],
+    },
+  },
 ];
 
 // Handler mapping
@@ -207,4 +397,8 @@ export const marginAccountHandlers: Record<string, MarginAccountHandler> = {
   withdraw_margin: withdrawMarginHandler,
   get_margin_balances: getMarginBalancesHandler,
   get_margin_orders: getMarginOrdersHandler,
+  borrow_base: borrowBaseHandler,
+  borrow_quote: borrowQuoteHandler,
+  repay_base: repayBaseHandler,
+  repay_quote: repayQuoteHandler,
 };
