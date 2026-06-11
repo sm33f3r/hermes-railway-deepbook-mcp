@@ -39,9 +39,9 @@ async function depositMarginHandler(
 
     const tx = new Transaction();
     if (coin_type === 'SUI') {
-      tx.add(mm.depositBase(MARGIN_KEY, amount));
+      tx.add(mm.depositBase({ managerKey: MARGIN_KEY, amount }));
     } else {
-      tx.add(mm.depositQuote(MARGIN_KEY, amount));
+      tx.add(mm.depositQuote({ managerKey: MARGIN_KEY, amount }));
     }
 
     const result = await executeTransaction(tx, state);
