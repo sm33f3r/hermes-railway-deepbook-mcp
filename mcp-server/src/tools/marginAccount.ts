@@ -156,11 +156,9 @@ async function borrowBaseHandler(
 
     const amount = args.amount as number;
     const mm = (state.client.deepbook as any).marginManager;
-    const address = state.keypair!.toSuiAddress();
 
     const tx = new Transaction();
-    const coin = mm.borrowBase(MARGIN_KEY, amount)(tx);
-    tx.transferObjects([coin], tx.pure.address(address));
+    mm.borrowBase(MARGIN_KEY, amount)(tx);
 
     const result = await executeTransaction(tx, state);
 
@@ -188,11 +186,9 @@ async function borrowQuoteHandler(
 
     const amount = args.amount as number;
     const mm = (state.client.deepbook as any).marginManager;
-    const address = state.keypair!.toSuiAddress();
 
     const tx = new Transaction();
-    const coin = mm.borrowQuote(MARGIN_KEY, amount)(tx);
-    tx.transferObjects([coin], tx.pure.address(address));
+    mm.borrowQuote(MARGIN_KEY, amount)(tx);
 
     const result = await executeTransaction(tx, state);
 
