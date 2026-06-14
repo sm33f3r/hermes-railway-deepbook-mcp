@@ -221,6 +221,29 @@ with open('${CONFIG_FILE}', 'w') as f:
 "
 }
 
+inject_memwal_config() {
+  if [[ -z "${MEMWAL_PRIVATE_KEY:-}" ]]; then
+    return
+  fi
+  if grep -q "MEMWAL_PRIVATE_KEY" "$CONFIG_FILE" 2>/dev/null; then
+    return
+  fi
+  echo "[bootstrap] Injecting MEMWAL config into MCP config"
+  python3 << PYEOF
+import re
+with open('${CONFIG_FILE}', 'r') as f:
+    content = f.read()
+pattern = r'(      SUI_PRIVATE_KEY: [^\n]+)'
+addition = ""
+addition += "\n      MEMWAL_PRIVATE_KEY: '${MEMWAL_PRIVATE_KEY}'"
+addition += "\n      MEMWAL_ACCOUNT_ID: '${MEMWAL_ACCOUNT_ID:-}'"
+addition += "\n      MEMWAL_SERVER_URL: '${MEMWAL_SERVER_URL:-https://relayer.memory.walrus.xyz}'"
+content = re.sub(pattern, r'\1' + addition, content)
+with open('${CONFIG_FILE}', 'w') as f:
+    f.write(content)
+PYEOF
+}
+
 migrate_legacy_messaging_cwd() {
   local persisted_cwd legacy_cwd
 
@@ -247,6 +270,7 @@ migrate_legacy_messaging_cwd
 ensure_model_in_config
 ensure_mcp_config
 inject_margin_manager_address
+inject_memwal_config
 
 echo "[bootstrap] Building MCP server..."
 cd /app/mcp-server && npm run build
@@ -268,7 +292,8 @@ for key in \
   TINKER_API_KEY WANDB_API_KEY RL_API_URL GITHUB_TOKEN \
   TERMINAL_ENV TERMINAL_BACKEND TERMINAL_DOCKER_IMAGE TERMINAL_SINGULARITY_IMAGE TERMINAL_MODAL_IMAGE TERMINAL_CWD TERMINAL_TIMEOUT TERMINAL_LIFETIME_SECONDS TERMINAL_CONTAINER_CPU TERMINAL_CONTAINER_MEMORY TERMINAL_CONTAINER_DISK TERMINAL_CONTAINER_PERSISTENT TERMINAL_SANDBOX_DIR TERMINAL_SSH_HOST TERMINAL_SSH_USER TERMINAL_SSH_PORT TERMINAL_SSH_KEY SUDO_PASSWORD \
   WEB_TOOLS_DEBUG VISION_TOOLS_DEBUG MOA_TOOLS_DEBUG IMAGE_TOOLS_DEBUG CONTEXT_COMPRESSION_ENABLED CONTEXT_COMPRESSION_THRESHOLD CONTEXT_COMPRESSION_MODEL HERMES_MAX_ITERATIONS HERMES_TOOL_PROGRESS HERMES_TOOL_PROGRESS_MODE \
-  SUI_PRIVATE_KEY BALANCE_MANAGER_ADDRESS MARGIN_MANAGER_ADDRESS
+  SUI_PRIVATE_KEY BALANCE_MANAGER_ADDRESS MARGIN_MANAGER_ADDRESS \
+  MEMWAL_PRIVATE_KEY MEMWAL_ACCOUNT_ID MEMWAL_SERVER_URL
 do
   append_if_set "$key"
 done
