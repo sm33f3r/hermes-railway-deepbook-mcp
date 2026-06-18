@@ -17,6 +17,7 @@ import { flashLoanTools, flashLoanHandlers } from './tools/flashLoans.js';
 import { memoryTools, memoryHandlers } from './tools/memory.js';
 import { marginAccountTools, marginAccountHandlers } from './tools/marginAccount.js';
 import { conditionalOrderTools, conditionalOrderHandlers } from './tools/conditionalOrders.js';
+import { muneoTools, muneoHandlers } from './tools/muneo.js';
 
 async function main() {
   try {
@@ -37,12 +38,12 @@ async function main() {
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
-        tools: [...marketDataTools, ...indicatorTools, ...accountTools, ...orderTools, ...swapTools, ...flashLoanTools, ...memoryTools, ...marginAccountTools, ...conditionalOrderTools],
+        tools: [...marketDataTools, ...indicatorTools, ...accountTools, ...orderTools, ...swapTools, ...flashLoanTools, ...memoryTools, ...marginAccountTools, ...conditionalOrderTools, ...muneoTools],
       };
     });
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const handler = { ...marketDataHandlers, ...indicatorHandlers, ...accountHandlers, ...orderHandlers, ...swapHandlers, ...flashLoanHandlers, ...memoryHandlers, ...marginAccountHandlers, ...conditionalOrderHandlers }[request.params.name];
+      const handler = { ...marketDataHandlers, ...indicatorHandlers, ...accountHandlers, ...orderHandlers, ...swapHandlers, ...flashLoanHandlers, ...memoryHandlers, ...marginAccountHandlers, ...conditionalOrderHandlers, ...muneoHandlers }[request.params.name];
       if (!handler) {
         throw new Error(`Unknown tool: ${request.params.name}`);
       }
@@ -53,7 +54,7 @@ async function main() {
     await server.connect(transport);
 
     process.stderr.write(`[deepbook-mcp] Server ready. Network: ${config.network}\n`);
-    process.stderr.write(`[deepbook-mcp] Tools registered: ${marketDataTools.length + indicatorTools.length + accountTools.length + orderTools.length + swapTools.length + flashLoanTools.length + memoryTools.length + marginAccountTools.length + conditionalOrderTools.length}\n`);
+    process.stderr.write(`[deepbook-mcp] Tools registered: ${marketDataTools.length + indicatorTools.length + accountTools.length + orderTools.length + swapTools.length + flashLoanTools.length + memoryTools.length + marginAccountTools.length + conditionalOrderTools.length + muneoTools.length}\n`);
   } catch (error) {
     process.stderr.write(`[deepbook-mcp] Fatal: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exit(1);
