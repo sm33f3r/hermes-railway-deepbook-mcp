@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@cetusprotocol/sui-clmm-sdk": "^1.4.6",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@mysten-incubation/memwal": "^0.0.7",
     "@mysten/deepbook-v3": "^1.4.1",
