@@ -92,6 +92,29 @@ export const cetusTools = [
       required: ['pos_id', 'liquidity_amount'],
     },
   },
+  {
+    name: 'cetus_collect_rewards',
+    description: 'Harvest all accrued trading fees and farming rewards from a Cetus LP position in one transaction. Always collects both fees and rewards together. Use this on a regular schedule to compound yield from active LP positions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pos_id: { type: 'string', description: 'Object ID of the Cetus position NFT.' },
+      },
+      required: ['pos_id'],
+    },
+  },
+  {
+    name: 'cetus_close_position',
+    description: 'Remove all remaining liquidity, collect all fees and rewards, and burn the position NFT in one atomic transaction. The position object ID is no longer valid after this call. Use this to fully exit a Cetus LP position.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pos_id: { type: 'string', description: 'Object ID of the position NFT to close.' },
+        slippage: { type: 'number', description: 'Slippage tolerance as a decimal. Default: 0.01 (1%).' },
+      },
+      required: ['pos_id'],
+    },
+  },
 ];
 
 async function cetusGetPoolHandler(
@@ -340,6 +363,87 @@ async function cetusRemoveLiquidityHandler(
   }
 }
 
+async function cetusCollectRewardsHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireKeypair(state);
+
+    const pos_id = args.pos_id as string;
+    if (!pos_id) throw new Error('pos_id is required.');
+
+    const position = await cetusSDK.Position.getPositionById(pos_id, false);
+    const pool = await cetusSDK.Pool.getPool((position as any).pool_id);
+
+    const rewarder_coin_types = pool.rewarder_infos.map((r: any) => r.coin_type);
+
+    const collect_params: any = {
+      pool_id: pool.id,
+      pos_id,
+      rewarder_coin_types,
+      coin_type_a: pool.coin_type_a,
+      coin_type_b: pool.coin_type_b,
+      collect_fee: true,
+    };
+
+    const payload = await cetusSDK.Rewarder.collectRewarderPayload(collect_params);
+    const tx = await cetusSDK.FullClient.executeTx(state.keypair!, payload as any, true);
+
+    const result = {
+      success: true,
+      pos_object_id: pos_id,
+      transaction_digest: (tx as any).digest ?? JSON.stringify(tx),
+    };
+
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+  } catch (error) {
+    return { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }) }] };
+  }
+}
+
+async function cetusClosePositionHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    requireKeypair(state);
+
+    const pos_id = args.pos_id as string;
+    const slippage = (args.slippage as number) ?? 0.01;
+    if (!pos_id) throw new Error('pos_id is required.');
+
+    const position = await cetusSDK.Position.getPositionById(pos_id, false);
+    const pool = await cetusSDK.Pool.getPool((position as any).pool_id);
+
+    const rewarder_coin_types = pool.rewarder_infos.map((r: any) => r.coin_type);
+
+    const close_params: any = {
+      coin_type_a: pool.coin_type_a,
+      coin_type_b: pool.coin_type_b,
+      min_amount_a: '0',
+      min_amount_b: '0',
+      rewarder_coin_types,
+      pool_id: pool.id,
+      pos_id,
+      collect_fee: true,
+    };
+
+    const payload = await cetusSDK.Position.closePositionPayload(close_params);
+    const tx = await cetusSDK.FullClient.executeTx(state.keypair!, payload as any, true);
+
+    const result = {
+      success: true,
+      position_closed: pos_id,
+      transaction_digest: (tx as any).digest ?? JSON.stringify(tx),
+    };
+
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+  } catch (error) {
+    return { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }) }] };
+  }
+}
+
 export const cetusHandlers: Record<string, (args: Record<string, unknown>, state: AppState) => Promise<{ content: { type: string; text: string }[] }>> = {
   cetus_get_pool: cetusGetPoolHandler,
   cetus_get_positions: cetusGetPositionsHandler,
@@ -347,4 +451,6 @@ export const cetusHandlers: Record<string, (args: Record<string, unknown>, state
   cetus_open_position: cetusOpenPositionHandler,
   cetus_add_liquidity: cetusAddLiquidityHandler,
   cetus_remove_liquidity: cetusRemoveLiquidityHandler,
+  cetus_collect_rewards: cetusCollectRewardsHandler,
+  cetus_close_position: cetusClosePositionHandler,
 };
