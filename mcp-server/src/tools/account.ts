@@ -3,6 +3,8 @@
  * Read-only account state queries on Sui mainnet.
  */
 
+import { Transaction } from '@mysten/sui/transactions';
+import { executeTransaction } from '../utils/tx-executor.js';
 import { config, isPoolAllowed } from '../config.js';
 import type { AppState } from '../client.js';
 
@@ -16,8 +18,17 @@ export type AccountHandler = (
 const MANAGER_KEY = 'MANAGER_1';
 
 /**
- * Check if balance manager is configured
+ * Shared prerequisite checks for withdrawal tools
  */
+async function performWithdrawalChecks(state: AppState): Promise<void> {
+  if (!config.balanceManagerAddress) {
+    throw new Error('Withdrawal tools require BALANCE_MANAGER_ADDRESS to be configured.');
+  }
+  if (!state.keypair) {
+    throw new Error('Cannot withdraw: MCP server is in read-only mode.');
+  }
+}
+
 function requireBalanceManager(toolName: string): void {
   if (!config.balanceManagerAddress) {
     throw new Error(`${toolName} requires BALANCE_MANAGER_ADDRESS to be configured.`);
@@ -299,7 +310,107 @@ async function getWalletBalanceHandler(
   }
 }
 
-// Tool definitions array
+// Tool 7: withdraw_from_balance_manager
+async function withdrawFromBalanceManagerHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    await performWithdrawalChecks(state);
+
+    const coin_type = args.coin_type as string;
+    const amount = args.amount as number;
+
+    if (!['SUI', 'USDC', 'DEEP'].includes(coin_type)) {
+      throw new Error(`coin_type must be one of: SUI, USDC, DEEP. Got: ${coin_type}`);
+    }
+
+    if (!amount || amount <= 0) {
+      throw new Error(`amount must be a positive number. Got: ${amount}`);
+    }
+
+    const address = state.keypair!.toSuiAddress();
+    const tx = new Transaction();
+
+    // Call withdrawFromManager with MANAGER_1, coin_type, amount, recipient address
+    tx.add(
+      (state.client.deepbook.balanceManager as any).withdrawFromManager(
+        MANAGER_KEY,
+        coin_type,
+        amount,
+        tx.pure.address(address)
+      )
+    );
+
+    const { tx_digest } = await executeTransaction(tx, state);
+
+    const result = {
+      success: true,
+      tx_digest,
+      coin_type,
+      amount,
+    };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    throw new Error(`withdraw_from_balance_manager failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// Tool 8: withdraw_all_from_balance_manager
+async function withdrawAllFromBalanceManagerHandler(
+  args: Record<string, unknown>,
+  state: AppState
+): Promise<{ content: { type: string; text: string }[] }> {
+  try {
+    await performWithdrawalChecks(state);
+
+    const coin_type = args.coin_type as string;
+
+    if (!['SUI', 'USDC', 'DEEP'].includes(coin_type)) {
+      throw new Error(`coin_type must be one of: SUI, USDC, DEEP. Got: ${coin_type}`);
+    }
+
+    const address = state.keypair!.toSuiAddress();
+    const tx = new Transaction();
+
+    // Call withdrawAllFromManager with MANAGER_1, coin_type, recipient address
+    tx.add(
+      (state.client.deepbook.balanceManager as any).withdrawAllFromManager(
+        MANAGER_KEY,
+        coin_type,
+        tx.pure.address(address)
+      )
+    );
+
+    const { tx_digest } = await executeTransaction(tx, state);
+
+    const result = {
+      success: true,
+      tx_digest,
+      coin_type,
+    };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (err) {
+    throw new Error(`withdraw_all_from_balance_manager failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 export const accountTools = [
   {
     name: 'get_balances',
@@ -377,6 +488,40 @@ export const accountTools = [
       properties: {},
     },
   },
+  {
+    name: 'withdraw_from_balance_manager',
+    description: 'Withdraw a specific amount of a coin from the BalanceManager to the wallet.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        coin_type: {
+          type: 'string',
+          description: 'Coin type to withdraw: SUI, USDC, or DEEP',
+          enum: ['SUI', 'USDC', 'DEEP'],
+        },
+        amount: {
+          type: 'number',
+          description: 'Amount to withdraw in human-readable units',
+        },
+      },
+      required: ['coin_type', 'amount'],
+    },
+  },
+  {
+    name: 'withdraw_all_from_balance_manager',
+    description: 'Withdraw the entire balance of a coin from the BalanceManager to the wallet.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        coin_type: {
+          type: 'string',
+          description: 'Coin type to withdraw: SUI, USDC, or DEEP',
+          enum: ['SUI', 'USDC', 'DEEP'],
+        },
+      },
+      required: ['coin_type'],
+    },
+  },
 ];
 
 // Handler mapping
@@ -387,4 +532,6 @@ export const accountHandlers: Record<string, AccountHandler> = {
   get_account_state: getAccountStateHandler,
   get_locked_balance: getLockedBalanceHandler,
   get_wallet_balance: getWalletBalanceHandler,
+  withdraw_from_balance_manager: withdrawFromBalanceManagerHandler,
+  withdraw_all_from_balance_manager: withdrawAllFromBalanceManagerHandler,
 };
