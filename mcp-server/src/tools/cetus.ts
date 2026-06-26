@@ -4,6 +4,8 @@
 
 import { CetusClmmSDK } from '@cetusprotocol/sui-clmm-sdk';
 import type { AppState } from '../client.js';
+import { executeTransaction } from '../utils/tx-executor.js';
+import { Transaction } from '@mysten/sui/transactions';
 
 const cetusSDK = CetusClmmSDK.createSDK({ env: 'mainnet' });
 
@@ -243,12 +245,12 @@ async function cetusOpenPositionHandler(
       add_mode_params,
     });
 
-    const tx = await cetusSDK.FullClient.executeTx(state.keypair!, payload, true);
+    const { tx_digest } = await executeTransaction(payload, state);
 
     const result = {
       success: true,
       pool_id,
-      transaction_digest: (tx as any).digest ?? JSON.stringify(tx),
+      transaction_digest: tx_digest,
     };
 
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
@@ -298,12 +300,12 @@ async function cetusAddLiquidityHandler(
     };
 
     const payload = await cetusSDK.Position.createAddLiquidityFixTokenPayload(add_liquidity_params);
-    const tx = await cetusSDK.FullClient.executeTx(state.keypair!, payload, true);
+    const { tx_digest } = await executeTransaction(payload, state);
 
     const result = {
       success: true,
       pos_object_id: pos_id,
-      transaction_digest: (tx as any).digest ?? JSON.stringify(tx),
+      transaction_digest: tx_digest,
     };
 
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
@@ -347,14 +349,14 @@ async function cetusRemoveLiquidityHandler(
       collect_fee,
     };
 
-    const payload = await cetusSDK.Position.removeLiquidityPayload(remove_liquidity_params);
-    const tx = await cetusSDK.FullClient.executeTx(state.keypair!, payload as any, true);
+    const payload = await cetusSDK.Position.removeLiquidityPayload(remove_liquidity_params) as Transaction;
+    const { tx_digest } = await executeTransaction(payload, state);
 
     const result = {
       success: true,
       pos_object_id: pos_id,
       liquidity_removed: liquidity_amount,
-      transaction_digest: (tx as any).digest ?? JSON.stringify(tx),
+      transaction_digest: tx_digest,
     };
 
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
@@ -388,12 +390,12 @@ async function cetusCollectRewardsHandler(
     };
 
     const payload = await cetusSDK.Rewarder.collectRewarderPayload(collect_params);
-    const tx = await cetusSDK.FullClient.executeTx(state.keypair!, payload as any, true);
+    const { tx_digest } = await executeTransaction(payload, state);
 
     const result = {
       success: true,
       pos_object_id: pos_id,
-      transaction_digest: (tx as any).digest ?? JSON.stringify(tx),
+      transaction_digest: tx_digest,
     };
 
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
@@ -430,12 +432,12 @@ async function cetusClosePositionHandler(
     };
 
     const payload = await cetusSDK.Position.closePositionPayload(close_params);
-    const tx = await cetusSDK.FullClient.executeTx(state.keypair!, payload as any, true);
+    const { tx_digest } = await executeTransaction(payload, state);
 
     const result = {
       success: true,
       position_closed: pos_id,
-      transaction_digest: (tx as any).digest ?? JSON.stringify(tx),
+      transaction_digest: tx_digest,
     };
 
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
