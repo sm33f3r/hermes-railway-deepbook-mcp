@@ -345,6 +345,8 @@ async function cetusRemoveLiquidityHandler(
       min_amount_b: '0',
       pool_id: pool.id,
       pos_id: (position as any).pos_object_id,
+      tick_lower: (position as any).tick_lower_index,
+      tick_upper: (position as any).tick_upper_index,
       rewarder_coin_types,
       collect_fee,
     };
@@ -428,6 +430,8 @@ async function cetusClosePositionHandler(
       rewarder_coin_types,
       pool_id: pool.id,
       pos_id,
+      tick_lower: (position as any).tick_lower_index,
+      tick_upper: (position as any).tick_upper_index,
       collect_fee: true,
     };
 
