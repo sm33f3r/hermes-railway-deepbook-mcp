@@ -277,7 +277,8 @@ async function cetusAddLiquidityHandler(
     if (!input_amount) throw new Error('input_amount is required.');
 
     const position = await cetusSDK.Position.getPositionById(pos_id, false);
-    const pool = await cetusSDK.Pool.getPool((position as any).pool_id);
+    const pool = await cetusSDK.Pool.getPool((position as any).pool || (position as any).pool_id || (position as any).poolId);
+    if (!pool) throw new Error('Failed to fetch pool for position.');
 
     const tick_lower = Number((position as any).tick_lower_index);
     const tick_upper = Number((position as any).tick_upper_index);
@@ -330,8 +331,9 @@ async function cetusRemoveLiquidityHandler(
     if (!pos_id) throw new Error('pos_id is required.');
     if (!liquidity_amount) throw new Error('liquidity_amount is required.');
 
-    const position = await cetusSDK.Position.getPositionById(pos_id, false);
-    const pool = await cetusSDK.Pool.getPool((position as any).pool_id);
+    const position = await cetusSDK.Position.getPositionById(pos_id, true);
+    const pool = await cetusSDK.Pool.getPool((position as any).pool || (position as any).pool_id || (position as any).poolId);
+    if (!pool) throw new Error('Failed to fetch pool for position.');
 
     const rewarder_coin_types = collect_rewards
       ? pool.rewarder_infos.map((r: any) => r.coin_type)
@@ -345,8 +347,8 @@ async function cetusRemoveLiquidityHandler(
       min_amount_b: '0',
       pool_id: pool.id,
       pos_id: (position as any).pos_object_id,
-      tick_lower: (position as any).tick_lower_index,
-      tick_upper: (position as any).tick_upper_index,
+      tick_lower: String((position as any).tick_lower_index),
+      tick_upper: String((position as any).tick_upper_index),
       rewarder_coin_types,
       collect_fee,
     };
@@ -363,7 +365,7 @@ async function cetusRemoveLiquidityHandler(
 
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   } catch (error) {
-    return { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }) }] };
+    return { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined }) }] };
   }
 }
 
@@ -378,7 +380,8 @@ async function cetusCollectRewardsHandler(
     if (!pos_id) throw new Error('pos_id is required.');
 
     const position = await cetusSDK.Position.getPositionById(pos_id, false);
-    const pool = await cetusSDK.Pool.getPool((position as any).pool_id);
+    const pool = await cetusSDK.Pool.getPool((position as any).pool || (position as any).pool_id || (position as any).poolId);
+    if (!pool) throw new Error('Failed to fetch pool for position.');
 
     const rewarder_coin_types = pool.rewarder_infos.map((r: any) => r.coin_type);
 
@@ -402,7 +405,7 @@ async function cetusCollectRewardsHandler(
 
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   } catch (error) {
-    return { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }) }] };
+    return { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined }) }] };
   }
 }
 
@@ -417,10 +420,23 @@ async function cetusClosePositionHandler(
     const slippage = (args.slippage as number) ?? 0.01;
     if (!pos_id) throw new Error('pos_id is required.');
 
-    const position = await cetusSDK.Position.getPositionById(pos_id, false);
-    const pool = await cetusSDK.Pool.getPool((position as any).pool_id);
+    try {
+      var position = await cetusSDK.Position.getPositionById(pos_id, true);
+      console.error('[cetus] getPositionById OK');
+    } catch (e) {
+      return { content: [{ type: 'text', text: JSON.stringify({ error: 'getPositionById failed: ' + (e instanceof Error ? e.message : String(e)) }) }] };
+    }
 
-    const rewarder_coin_types = pool.rewarder_infos.map((r: any) => r.coin_type);
+    try {
+      console.error('[cetus] position keys: ' + Object.keys(position).join(', '));
+      var pool = await cetusSDK.Pool.getPool((position as any).pool || (position as any).pool_id || (position as any).poolId);
+      if (!pool) throw new Error('Failed to fetch pool for position.');
+      console.error('[cetus] getPool OK');
+    } catch (e) {
+      return { content: [{ type: 'text', text: JSON.stringify({ error: 'getPool failed: ' + (e instanceof Error ? e.message : String(e)) }) }] };
+    }
+
+    const rewarder_coin_types = (pool as any).rewarder_infos.map((r: any) => r.coin_type);
 
     const close_params: any = {
       coin_type_a: pool.coin_type_a,
@@ -429,24 +445,33 @@ async function cetusClosePositionHandler(
       min_amount_b: '0',
       rewarder_coin_types,
       pool_id: pool.id,
-      pos_id,
-      tick_lower: (position as any).tick_lower_index,
-      tick_upper: (position as any).tick_upper_index,
+      pos_id: (position as any).pos_object_id,
+      tick_lower: String((position as any).tick_lower_index),
+      tick_upper: String((position as any).tick_upper_index),
       collect_fee: true,
     };
 
-    const payload = await cetusSDK.Position.closePositionPayload(close_params);
-    const { tx_digest } = await executeTransaction(payload, state);
+    try {
+      const payload = await cetusSDK.Position.closePositionPayload(close_params);
+      console.error('[cetus] closePositionPayload OK');
+      const { tx_digest } = await executeTransaction(payload, state);
+      console.error('[cetus] executeTransaction OK');
 
-    const result = {
-      success: true,
-      position_closed: pos_id,
-      transaction_digest: tx_digest,
-    };
+      const result = {
+        success: true,
+        position_closed: pos_id,
+        transaction_digest: tx_digest,
+      };
 
-    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { content: [{ type: 'text', text: JSON.stringify({ error: 'closePayload/exec failed: ' + (e instanceof Error ? e.message : String(e)), stack: e instanceof Error ? e.stack : undefined }) }] };
+    }
+
+    // unreachable
+    return { content: [{ type: 'text', text: '{}' }] };
   } catch (error) {
-    return { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }) }] };
+    return { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined }) }] };
   }
 }
 
