@@ -3,6 +3,7 @@
  */
 
 import { CetusClmmSDK } from '@cetusprotocol/sui-clmm-sdk';
+import { TickMath } from '@cetusprotocol/common-sdk';
 import type { AppState } from '../client.js';
 import { executeTransaction } from '../utils/tx-executor.js';
 import { Transaction } from '@mysten/sui/transactions';
@@ -270,37 +271,47 @@ async function cetusAddLiquidityHandler(
     const fix_amount_a = args.fix_amount_a as boolean;
     const input_amount = args.input_amount as string;
     const slippage = (args.slippage as number) ?? 0.01;
-    const collect_fee = (args.collect_fee as boolean) ?? false;
 
     if (!pos_id) throw new Error('pos_id is required.');
     if (fix_amount_a === undefined) throw new Error('fix_amount_a is required.');
     if (!input_amount) throw new Error('input_amount is required.');
 
-    const position = await cetusSDK.Position.getPositionById(pos_id, false);
-    const pool = await cetusSDK.Pool.getPool((position as any).pool || (position as any).pool_id || (position as any).poolId);
+    const position = await cetusSDK.Position.getPositionById(pos_id, true);
+    const pool_id = (position as any).pool || (position as any).pool_id || (position as any).poolId;
+    const pool = await cetusSDK.Pool.getPool(pool_id);
     if (!pool) throw new Error('Failed to fetch pool for position.');
 
-    const tick_lower = Number((position as any).tick_lower_index);
-    const tick_upper = Number((position as any).tick_upper_index);
-    const coin_amount = input_amount;
+    const tick_lower_index = Number((position as any).tick_lower_index);
+    const tick_upper_index = Number((position as any).tick_upper_index);
 
-    const add_liquidity_params: any = {
-      coin_type_a: pool.coin_type_a,
-      coin_type_b: pool.coin_type_b,
-      pool_id: pool.id,
-      tick_lower: tick_lower.toString(),
-      tick_upper: tick_upper.toString(),
-      fix_amount_a,
-      amount_a: fix_amount_a ? coin_amount : '0',
-      amount_b: fix_amount_a ? '0' : coin_amount,
-      slippage,
-      is_open: false,
-      pos_id: (position as any).pos_object_id,
-      rewarder_coin_types: [],
-      collect_fee,
+    // Convert tick bounds to prices using TickMath
+    // DEEP has 6 decimals, SUI has 9 decimals
+    const min_price = TickMath.tickIndexToPrice(tick_lower_index, 6, 9).toString();
+    const max_price = TickMath.tickIndexToPrice(tick_upper_index, 6, 9).toString();
+
+    const add_mode_params: any = {
+      is_full_range: false,
+      min_price,
+      max_price,
+      price_base_coin: 'coin_a',
+      coin_decimals_a: 6,
+      coin_decimals_b: 9,
     };
 
-    const payload = await cetusSDK.Position.createAddLiquidityFixTokenPayload(add_liquidity_params);
+    const calculate_result = await cetusSDK.Position.calculateAddLiquidityResultWithPrice({
+      add_mode_params,
+      pool_id,
+      slippage,
+      coin_amount: input_amount,
+      fix_amount_a,
+    });
+
+    const payload = await cetusSDK.Position.createAddLiquidityFixCoinWithPricePayload({
+      pool_id,
+      calculate_result,
+      add_mode_params,
+    });
+
     const { tx_digest } = await executeTransaction(payload, state);
 
     const result = {
