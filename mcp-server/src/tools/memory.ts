@@ -153,13 +153,10 @@ async function memoryRecallHandler(
 
     const client = await ensureMemWalInitialized();
 
-    // Call recall with appropriate parameters
-    const results = await client.recall(query, namespace, limit, maxDistance);
+    const response = await client.recall({ query, namespace, limit });
 
-    // Process results - ensure they're in array format
-    const resultsArray = Array.isArray(results) ? results : [];
+    const resultsArray = Array.isArray(response) ? response : (response?.results ?? []);
 
-    // Filter results by maxDistance and format them
     const filteredResults = resultsArray
       .filter((result: any) => result.distance <= maxDistance)
       .map((result: any) => ({
