@@ -221,6 +221,26 @@ with open('${CONFIG_FILE}', 'w') as f:
 "
 }
 
+inject_github_config() {
+  if [[ -z "${GITHUB_REPO:-}" ]]; then
+    return
+  fi
+  if grep -q "GITHUB_REPO" "$CONFIG_FILE" 2>/dev/null; then
+    return
+  fi
+  echo "[bootstrap] Injecting GITHUB_REPO/GITHUB_TOKEN into MCP config"
+  python3 -c "
+import re
+with open('${CONFIG_FILE}', 'r') as f:
+    content = f.read()
+pattern = r'(      BALANCE_MANAGER_ADDRESS: [^\n]+)'
+replacement = r'\1\n      GITHUB_REPO: \"${GITHUB_REPO}\"\n      GITHUB_TOKEN: \"${GITHUB_TOKEN:-}\"'
+content = re.sub(pattern, replacement, content)
+with open('${CONFIG_FILE}', 'w') as f:
+    f.write(content)
+"
+}
+
 inject_memwal_config() {
   if [[ -z "${MEMWAL_PRIVATE_KEY:-}" ]]; then
     return
@@ -270,6 +290,7 @@ migrate_legacy_messaging_cwd
 ensure_model_in_config
 ensure_mcp_config
 inject_margin_manager_address
+inject_github_config
 inject_memwal_config
 
 echo "[bootstrap] Building MCP server..."
@@ -293,7 +314,8 @@ for key in \
   TERMINAL_ENV TERMINAL_BACKEND TERMINAL_DOCKER_IMAGE TERMINAL_SINGULARITY_IMAGE TERMINAL_MODAL_IMAGE TERMINAL_CWD TERMINAL_TIMEOUT TERMINAL_LIFETIME_SECONDS TERMINAL_CONTAINER_CPU TERMINAL_CONTAINER_MEMORY TERMINAL_CONTAINER_DISK TERMINAL_CONTAINER_PERSISTENT TERMINAL_SANDBOX_DIR TERMINAL_SSH_HOST TERMINAL_SSH_USER TERMINAL_SSH_PORT TERMINAL_SSH_KEY SUDO_PASSWORD \
   WEB_TOOLS_DEBUG VISION_TOOLS_DEBUG MOA_TOOLS_DEBUG IMAGE_TOOLS_DEBUG CONTEXT_COMPRESSION_ENABLED CONTEXT_COMPRESSION_THRESHOLD CONTEXT_COMPRESSION_MODEL HERMES_MAX_ITERATIONS HERMES_TOOL_PROGRESS HERMES_TOOL_PROGRESS_MODE \
   SUI_PRIVATE_KEY BALANCE_MANAGER_ADDRESS MARGIN_MANAGER_ADDRESS \
-  MEMWAL_PRIVATE_KEY MEMWAL_ACCOUNT_ID MEMWAL_SERVER_URL
+  MEMWAL_PRIVATE_KEY MEMWAL_ACCOUNT_ID MEMWAL_SERVER_URL \
+  PREDICT_PRIVATE_KEY
 do
   append_if_set "$key"
 done
